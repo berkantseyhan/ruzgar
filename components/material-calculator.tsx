@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calculator, RotateCcw, Wind } from "lucide-react"
+import { Calculator, RotateCcw, Wind, AlertCircle } from "lucide-react"
 import { trackEvent, getClientSessionId } from "@/actions/track-event"
 import { useDebounce } from "@/hooks/use-debounce"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 type Material = {
   name: string
@@ -49,6 +50,9 @@ export function MaterialCalculator() {
   const [cost, setCost] = useState<number>(0)
   const [quantity, setQuantity] = useState<number>(1)
 
+  // Validation
+  const [validationError, setValidationError] = useState<string | null>(null)
+
   // Session ID for tracking
   const [sessionId, setSessionId] = useState<string>("")
 
@@ -83,6 +87,17 @@ export function MaterialCalculator() {
     initSession()
   }, [])
 
+  // Validate inputs
+  useEffect(() => {
+    if (shapeType === "round") {
+      if (innerDiameter >= outerDiameter && outerDiameter > 0) {
+        setValidationError("İç çap, dış çaptan küçük olmalıdır")
+        return
+      }
+    }
+    setValidationError(null)
+  }, [shapeType, innerDiameter, outerDiameter])
+
   // Calculate weight and cost whenever inputs change
   useEffect(() => {
     calculateResults()
@@ -97,6 +112,7 @@ export function MaterialCalculator() {
     width,
     rectThickness,
     quantity,
+    validationError,
   ])
 
   // Track material price changes
@@ -159,19 +175,34 @@ export function MaterialCalculator() {
   }, [debouncedLength, debouncedWidth, debouncedRectThickness, shapeType, sessionId])
 
   const calculateResults = () => {
+    // If there's a validation error, don't calculate
+    if (validationError) {
+      setWeight(0)
+      setCost(0)
+      return
+    }
+
     let calculatedWeight = 0
 
     if (shapeType === "round") {
       // Weight (kg) = π × ( (Outer Diameter / 2)² - (Inner Diameter / 2)² ) × Thickness × Density ÷ 1,000,000
-      if (outerDiameter && roundThickness) {
+      if (outerDiameter > 0 && roundThickness > 0) {
         const outerRadius = outerDiameter / 2
         const innerRadius = innerDiameter / 2
+
+        // Check if inner diameter is valid (less than outer diameter)
+        if (innerDiameter >= outerDiameter) {
+          setWeight(0)
+          setCost(0)
+          return
+        }
+
         calculatedWeight =
           (Math.PI * (Math.pow(outerRadius, 2) - Math.pow(innerRadius, 2)) * roundThickness * materialDensity) / 1000000
       }
     } else {
       // Weight (kg) = Length × Width × Thickness × Density ÷ 1,000,000
-      if (length && width && rectThickness) {
+      if (length > 0 && width > 0 && rectThickness > 0) {
         calculatedWeight = (length * width * rectThickness * materialDensity) / 1000000
       }
     }
@@ -216,6 +247,7 @@ export function MaterialCalculator() {
     setQuantity(1)
     setWeight(0)
     setCost(0)
+    setValidationError(null)
   }
 
   const handleMaterialChange = (value: string) => {
@@ -324,8 +356,15 @@ export function MaterialCalculator() {
                       value={innerDiameter || ""}
                       onChange={(e) => setInnerDiameter(Number.parseFloat(e.target.value) || 0)}
                       placeholder="İç çap girin"
+                      className={validationError ? "border-red-500" : ""}
                     />
                     <p className="text-xs text-muted-foreground">Tam disk için 0 kullanın</p>
+                    {validationError && (
+                      <Alert variant="destructive" className="mt-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{validationError}</AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="roundThickness">Kalınlık (mm)</Label>
