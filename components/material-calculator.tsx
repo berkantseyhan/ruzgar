@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calculator, RotateCcw } from "lucide-react"
+import { Calculator, RotateCcw, Wind } from "lucide-react"
+import { trackEvent, getClientSessionId } from "@/actions/track-event"
+import { useDebounce } from "@/hooks/use-debounce"
 
 type Material = {
   name: string
@@ -17,15 +19,18 @@ type Material = {
 type ShapeType = "round" | "rectangular"
 
 const materials: Material[] = [
-  { name: "Steel", density: 7.85 },
-  { name: "Stainless Steel", density: 8.0 },
-  { name: "Aluminum", density: 2.7 },
-  { name: "Copper", density: 8.96 },
-  { name: "Brass", density: 8.4 },
+  { name: "Çelik", density: 7.85 },
+  { name: "Paslanmaz Çelik", density: 8.0 },
+  { name: "Alüminyum", density: 2.7 },
+  { name: "Bakır", density: 8.96 },
+  { name: "Pirinç", density: 8.4 },
+  { name: "Galvanizli Çelik", density: 7.85 },
+  { name: "Karbon Çelik", density: 7.85 },
 ]
 
 export function MaterialCalculator() {
   const [materialDensity, setMaterialDensity] = useState<number>(materials[0].density)
+  const [materialName, setMaterialName] = useState<string>(materials[0].name)
   const [materialPrice, setMaterialPrice] = useState<number>(0)
   const [shapeType, setShapeType] = useState<ShapeType>("round")
 
@@ -42,6 +47,41 @@ export function MaterialCalculator() {
   // Results
   const [weight, setWeight] = useState<number>(0)
   const [cost, setCost] = useState<number>(0)
+  const [quantity, setQuantity] = useState<number>(1)
+
+  // Session ID for tracking
+  const [sessionId, setSessionId] = useState<string>("")
+
+  // Debounced values for tracking to avoid too many events
+  const debouncedMaterialPrice = useDebounce(materialPrice, 1000)
+  const debouncedOuterDiameter = useDebounce(outerDiameter, 1000)
+  const debouncedInnerDiameter = useDebounce(innerDiameter, 1000)
+  const debouncedRoundThickness = useDebounce(roundThickness, 1000)
+  const debouncedLength = useDebounce(length, 1000)
+  const debouncedWidth = useDebounce(width, 1000)
+  const debouncedRectThickness = useDebounce(rectThickness, 1000)
+  const debouncedQuantity = useDebounce(quantity, 1000)
+
+  // Initialize session ID
+  useEffect(() => {
+    const initSession = async () => {
+      // Use client-side session ID generation
+      const sid = await getClientSessionId()
+      setSessionId(sid)
+
+      // Store in localStorage for persistence
+      if (typeof window !== "undefined") {
+        const storedId = localStorage.getItem("ruzgar_session_id")
+        if (storedId) {
+          setSessionId(storedId)
+        } else {
+          localStorage.setItem("ruzgar_session_id", sid)
+        }
+      }
+    }
+
+    initSession()
+  }, [])
 
   // Calculate weight and cost whenever inputs change
   useEffect(() => {
@@ -56,7 +96,67 @@ export function MaterialCalculator() {
     length,
     width,
     rectThickness,
+    quantity,
   ])
+
+  // Track material price changes
+  useEffect(() => {
+    if (sessionId && debouncedMaterialPrice > 0) {
+      trackEvent("price_changed", {
+        materialType: materialName,
+        price: debouncedMaterialPrice,
+        sessionId,
+      })
+    }
+  }, [debouncedMaterialPrice, materialName, sessionId])
+
+  // Track quantity changes
+  useEffect(() => {
+    if (sessionId && debouncedQuantity > 1) {
+      trackEvent("quantity_changed", {
+        quantity: debouncedQuantity,
+        sessionId,
+      })
+    }
+  }, [debouncedQuantity, sessionId])
+
+  // Track dimension changes for round shape
+  useEffect(() => {
+    if (
+      sessionId &&
+      shapeType === "round" &&
+      (debouncedOuterDiameter > 0 || debouncedInnerDiameter > 0 || debouncedRoundThickness > 0)
+    ) {
+      trackEvent("dimension_changed", {
+        shapeType: "round",
+        dimensions: {
+          outerDiameter: debouncedOuterDiameter,
+          innerDiameter: debouncedInnerDiameter,
+          thickness: debouncedRoundThickness,
+        },
+        sessionId,
+      })
+    }
+  }, [debouncedOuterDiameter, debouncedInnerDiameter, debouncedRoundThickness, shapeType, sessionId])
+
+  // Track dimension changes for rectangular shape
+  useEffect(() => {
+    if (
+      sessionId &&
+      shapeType === "rectangular" &&
+      (debouncedLength > 0 || debouncedWidth > 0 || debouncedRectThickness > 0)
+    ) {
+      trackEvent("dimension_changed", {
+        shapeType: "rectangular",
+        dimensions: {
+          length: debouncedLength,
+          width: debouncedWidth,
+          thickness: debouncedRectThickness,
+        },
+        sessionId,
+      })
+    }
+  }, [debouncedLength, debouncedWidth, debouncedRectThickness, shapeType, sessionId])
 
   const calculateResults = () => {
     let calculatedWeight = 0
@@ -76,14 +176,34 @@ export function MaterialCalculator() {
       }
     }
 
-    // Calculate cost
-    const calculatedCost = calculatedWeight * materialPrice
+    // Calculate cost for the total quantity
+    const totalWeight = calculatedWeight * quantity
+    const calculatedCost = totalWeight * materialPrice
 
-    setWeight(calculatedWeight)
+    setWeight(totalWeight)
     setCost(calculatedCost)
+
+    // Track calculation if we have meaningful results
+    if (totalWeight > 0 && calculatedCost > 0 && sessionId) {
+      trackEvent("calculation_performed", {
+        materialType: materialName,
+        materialDensity,
+        shapeType,
+        dimensions:
+          shapeType === "round"
+            ? { outerDiameter, innerDiameter, thickness: roundThickness }
+            : { length, width, thickness: rectThickness },
+        price: materialPrice,
+        quantity,
+        weight: totalWeight,
+        cost: calculatedCost,
+        sessionId,
+      })
+    }
   }
 
   const resetForm = () => {
+    setMaterialName(materials[0].name)
     setMaterialDensity(materials[0].density)
     setMaterialPrice(0)
     setShapeType("round")
@@ -93,6 +213,7 @@ export function MaterialCalculator() {
     setLength(0)
     setWidth(0)
     setRectThickness(0)
+    setQuantity(1)
     setWeight(0)
     setCost(0)
   }
@@ -100,27 +221,49 @@ export function MaterialCalculator() {
   const handleMaterialChange = (value: string) => {
     const selectedMaterial = materials.find((m) => m.name === value)
     if (selectedMaterial) {
+      setMaterialName(selectedMaterial.name)
       setMaterialDensity(selectedMaterial.density)
+
+      // Track material selection
+      if (sessionId) {
+        trackEvent("material_selected", {
+          materialType: selectedMaterial.name,
+          materialDensity: selectedMaterial.density,
+          sessionId,
+        })
+      }
+    }
+  }
+
+  const handleShapeChange = (value: ShapeType) => {
+    setShapeType(value)
+
+    // Track shape selection
+    if (sessionId) {
+      trackEvent("shape_selected", {
+        shapeType: value,
+        sessionId,
+      })
     }
   }
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      <Card className="h-fit">
-        <CardHeader>
+      <Card className="h-fit border-primary/20">
+        <CardHeader className="bg-primary/5">
           <CardTitle className="flex items-center gap-2">
             <Calculator className="h-5 w-5" />
-            Input Parameters
+            Giriş Parametreleri
           </CardTitle>
-          <CardDescription>Enter material properties and dimensions</CardDescription>
+          <CardDescription>Malzeme özellikleri ve boyutları girin</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="material">Material</Label>
+              <Label htmlFor="material">Malzeme</Label>
               <Select onValueChange={handleMaterialChange} defaultValue={materials[0].name}>
                 <SelectTrigger id="material">
-                  <SelectValue placeholder="Select material" />
+                  <SelectValue placeholder="Malzeme seçin" />
                 </SelectTrigger>
                 <SelectContent>
                   {materials.map((material) => (
@@ -130,11 +273,11 @@ export function MaterialCalculator() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">Density: {materialDensity} g/cm³</p>
+              <p className="text-xs text-muted-foreground">Yoğunluk: {materialDensity} g/cm³</p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="price">Material Price (₺/kg)</Label>
+              <Label htmlFor="price">Malzeme Fiyatı (₺/kg)</Label>
               <Input
                 id="price"
                 type="number"
@@ -142,21 +285,25 @@ export function MaterialCalculator() {
                 step="0.01"
                 value={materialPrice || ""}
                 onChange={(e) => setMaterialPrice(Number.parseFloat(e.target.value) || 0)}
-                placeholder="Enter price per kilogram"
+                placeholder="Kilogram başına fiyat girin"
               />
-              <p className="text-xs text-muted-foreground">Price of material per kilogram in Turkish Lira</p>
+              <p className="text-xs text-muted-foreground">Malzemenin kilogram başına Türk Lirası cinsinden fiyatı</p>
             </div>
 
             <div className="space-y-2">
-              <Label>Cut Shape</Label>
-              <Tabs defaultValue="round" value={shapeType} onValueChange={(value) => setShapeType(value as ShapeType)}>
+              <Label>Kesim Şekli</Label>
+              <Tabs
+                defaultValue="round"
+                value={shapeType}
+                onValueChange={(value) => handleShapeChange(value as ShapeType)}
+              >
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="round">Round Pul (Disk)</TabsTrigger>
-                  <TabsTrigger value="rectangular">Rectangular Plate</TabsTrigger>
+                  <TabsTrigger value="round">Yuvarlak Pul (Disk)</TabsTrigger>
+                  <TabsTrigger value="rectangular">Dikdörtgen Plaka</TabsTrigger>
                 </TabsList>
                 <TabsContent value="round" className="space-y-4 pt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="outerDiameter">Outer Diameter (mm)</Label>
+                    <Label htmlFor="outerDiameter">Dış Çap (mm)</Label>
                     <Input
                       id="outerDiameter"
                       type="number"
@@ -164,11 +311,11 @@ export function MaterialCalculator() {
                       step="0.1"
                       value={outerDiameter || ""}
                       onChange={(e) => setOuterDiameter(Number.parseFloat(e.target.value) || 0)}
-                      placeholder="Enter outer diameter"
+                      placeholder="Dış çap girin"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="innerDiameter">Inner Diameter (mm)</Label>
+                    <Label htmlFor="innerDiameter">İç Çap (mm)</Label>
                     <Input
                       id="innerDiameter"
                       type="number"
@@ -176,12 +323,12 @@ export function MaterialCalculator() {
                       step="0.1"
                       value={innerDiameter || ""}
                       onChange={(e) => setInnerDiameter(Number.parseFloat(e.target.value) || 0)}
-                      placeholder="Enter inner diameter"
+                      placeholder="İç çap girin"
                     />
-                    <p className="text-xs text-muted-foreground">Use 0 for solid disk</p>
+                    <p className="text-xs text-muted-foreground">Tam disk için 0 kullanın</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="roundThickness">Thickness (mm)</Label>
+                    <Label htmlFor="roundThickness">Kalınlık (mm)</Label>
                     <Input
                       id="roundThickness"
                       type="number"
@@ -189,13 +336,13 @@ export function MaterialCalculator() {
                       step="0.1"
                       value={roundThickness || ""}
                       onChange={(e) => setRoundThickness(Number.parseFloat(e.target.value) || 0)}
-                      placeholder="Enter thickness"
+                      placeholder="Kalınlık girin"
                     />
                   </div>
                 </TabsContent>
                 <TabsContent value="rectangular" className="space-y-4 pt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="length">Length (mm)</Label>
+                    <Label htmlFor="length">Uzunluk (mm)</Label>
                     <Input
                       id="length"
                       type="number"
@@ -203,11 +350,11 @@ export function MaterialCalculator() {
                       step="0.1"
                       value={length || ""}
                       onChange={(e) => setLength(Number.parseFloat(e.target.value) || 0)}
-                      placeholder="Enter length"
+                      placeholder="Uzunluk girin"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="width">Width (mm)</Label>
+                    <Label htmlFor="width">Genişlik (mm)</Label>
                     <Input
                       id="width"
                       type="number"
@@ -215,11 +362,11 @@ export function MaterialCalculator() {
                       step="0.1"
                       value={width || ""}
                       onChange={(e) => setWidth(Number.parseFloat(e.target.value) || 0)}
-                      placeholder="Enter width"
+                      placeholder="Genişlik girin"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="rectThickness">Thickness (mm)</Label>
+                    <Label htmlFor="rectThickness">Kalınlık (mm)</Label>
                     <Input
                       id="rectThickness"
                       type="number"
@@ -227,56 +374,108 @@ export function MaterialCalculator() {
                       step="0.1"
                       value={rectThickness || ""}
                       onChange={(e) => setRectThickness(Number.parseFloat(e.target.value) || 0)}
-                      placeholder="Enter thickness"
+                      placeholder="Kalınlık girin"
                     />
                   </div>
                 </TabsContent>
               </Tabs>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="quantity">Adet</Label>
+              <Input
+                id="quantity"
+                type="number"
+                min="1"
+                step="1"
+                value={quantity || ""}
+                onChange={(e) => setQuantity(Math.max(1, Number.parseInt(e.target.value) || 1))}
+                placeholder="Adet girin"
+              />
+              <p className="text-xs text-muted-foreground">Hesaplanacak parça adedi</p>
+            </div>
           </div>
 
           <Button variant="outline" className="w-full" onClick={resetForm}>
             <RotateCcw className="mr-2 h-4 w-4" />
-            Reset All
+            Tümünü Sıfırla
           </Button>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Results</CardTitle>
-          <CardDescription>Calculated weight and cost based on your inputs</CardDescription>
+      <Card className="border-primary/20">
+        <CardHeader className="bg-primary/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Sonuçlar</CardTitle>
+              <CardDescription>Girişlerinize göre hesaplanan ağırlık ve maliyet</CardDescription>
+            </div>
+            <Wind className="h-8 w-8 text-primary opacity-50" />
+          </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Cut Material Weight</Label>
+              <Label>Toplam Ağırlık</Label>
               <div className="rounded-md border bg-muted/50 p-4">
                 <p className="text-2xl font-bold">{weight.toFixed(3)} kg</p>
               </div>
-              <p className="text-xs text-muted-foreground">Calculated based on material density and dimensions</p>
+              <p className="text-xs text-muted-foreground">
+                {quantity > 1
+                  ? `${quantity} adet için toplam ağırlık`
+                  : "Malzeme yoğunluğu ve boyutlara göre hesaplanmıştır"}
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label>Total Cost</Label>
+              <Label>Toplam Maliyet</Label>
               <div className="rounded-md border bg-muted/50 p-4">
-                <p className="text-2xl font-bold">₺ {cost.toFixed(2)}</p>
+                <p className="text-2xl font-bold">{cost.toFixed(2)} ₺</p>
               </div>
-              <p className="text-xs text-muted-foreground">Weight × Price per Kilogram</p>
+              <p className="text-xs text-muted-foreground">
+                {quantity > 1 ? `${quantity} adet için toplam maliyet` : "Ağırlık × Kilogram Başına Fiyat"}
+              </p>
             </div>
+
+            {quantity > 1 && (
+              <div className="space-y-2">
+                <Label>Birim Bilgileri</Label>
+                <div className="rounded-md border bg-muted/50 p-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Birim Ağırlık:</span>
+                    <span className="text-sm font-medium">{(weight / quantity).toFixed(3)} kg</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Birim Maliyet:</span>
+                    <span className="text-sm font-medium">{(cost / quantity).toFixed(2)} ₺</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-md border bg-muted/30 p-4">
-            <h3 className="font-medium mb-2">Calculation Method</h3>
+            <h3 className="font-medium mb-2">Hesaplama Yöntemi</h3>
             {shapeType === "round" ? (
               <p className="text-sm text-muted-foreground">
-                Weight (kg) = π × ( (Outer Diameter / 2)² - (Inner Diameter / 2)² ) × Thickness × Density ÷ 1,000,000
+                Ağırlık (kg) = π × ( (Dış Çap / 2)² - (İç Çap / 2)² ) × Kalınlık × Yoğunluk ÷ 1.000.000
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Weight (kg) = Length × Width × Thickness × Density ÷ 1,000,000
+                Ağırlık (kg) = Uzunluk × Genişlik × Kalınlık × Yoğunluk ÷ 1.000.000
               </p>
             )}
+          </div>
+
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+            <div className="flex items-center gap-2">
+              <Wind className="h-5 w-5 text-primary" />
+              <h3 className="font-medium">Rüzgar Cıvata Bağlantı Elemanları</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Bu hesaplama aracı, malzeme ağırlığı ve maliyeti için yaklaşık değerler sağlar. Kesin fiyatlandırma için
+              lütfen bizimle iletişime geçin.
+            </p>
           </div>
         </CardContent>
       </Card>
