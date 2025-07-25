@@ -36,34 +36,44 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   useEffect(() => {
     const fetchLayout = async () => {
       try {
+        console.log(`Fetching layout for shelf: ${shelfId}`)
         const response = await fetch("/api/layout", {
           method: "GET",
           headers: {
-            "Cache-Control": "no-cache", // Force fresh data
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
           },
         })
         if (response.ok) {
           const data = await response.json()
           const layout: WarehouseLayout = data.layout
+          console.log("Fetched layout:", layout)
           setWarehouseLayout(layout)
 
           // Get available layers for this shelf
           const layers = getAvailableLayersForShelf(shelfId, layout)
+          console.log(`Available layers for ${shelfId}:`, layers)
+
           const layerOptions = layers.map((layer) => ({
             value: layer as Layer,
             label: layer.charAt(0).toUpperCase() + layer.slice(1),
           }))
 
           setAvailableLayers(layerOptions)
+          console.log("Layer options set:", layerOptions)
 
           // Set the first available layer as active, but preserve current if valid
           if (layerOptions.length > 0) {
             const currentLayerValid = layerOptions.some((layer) => layer.value === activeLayer)
             if (!currentLayerValid) {
+              console.log(`Setting active layer to: ${layerOptions[0].value}`)
               setActiveLayer(layerOptions[0].value)
+            } else {
+              console.log(`Keeping current active layer: ${activeLayer}`)
             }
           }
         } else {
+          console.error("Failed to fetch layout, using fallback")
           // Fallback to default layers
           const defaultLayers = getDefaultLayers(shelfId)
           setAvailableLayers(defaultLayers)

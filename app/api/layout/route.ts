@@ -19,7 +19,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { layout } = await request.json()
+    const data = await request.json()
+    const { layout } = data
+
+    console.log("Received layout save request")
+    console.log("Layout data:", JSON.stringify(layout, null, 2))
 
     if (!layout) {
       return NextResponse.json({ error: "Layout data is required" }, { status: 400 })
@@ -30,7 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid layout structure" }, { status: 400 })
     }
 
-    // Ensure each shelf has required properties
+    // Ensure each shelf has required properties and preserve custom layers
     const validatedLayout = {
       ...layout,
       shelves: layout.shelves.map((shelf: any) => ({
@@ -40,20 +44,20 @@ export async function POST(request: NextRequest) {
         width: Number(shelf.width) || 15,
         height: Number(shelf.height) || 15,
         isCommon: Boolean(shelf.isCommon),
+        customLayers: shelf.customLayers || undefined, // Preserve custom layers
       })),
       updatedAt: Date.now(),
     }
 
-    console.log(
-      "Saving layout with shelves:",
-      validatedLayout.shelves.map((s) => s.id),
-    )
+    console.log("Validated layout:", JSON.stringify(validatedLayout, null, 2))
 
     const success = await saveWarehouseLayout(validatedLayout as WarehouseLayout)
 
     if (success) {
+      console.log("Layout saved successfully to Redis")
       return NextResponse.json({ success: true, layout: validatedLayout })
     } else {
+      console.error("Failed to save layout to Redis")
       return NextResponse.json({ error: "Failed to save warehouse layout" }, { status: 500 })
     }
   } catch (error) {

@@ -492,6 +492,9 @@ export default function DraggableWarehouseMap() {
   const handleSaveLayers = async (updatedShelf: ShelfLayout) => {
     if (!layout) return
 
+    console.log("Saving layers for shelf:", updatedShelf.id)
+    console.log("Updated shelf data:", updatedShelf)
+
     const updatedShelves = layout.shelves.map((shelf) => (shelf.id === updatedShelf.id ? updatedShelf : shelf))
 
     const updatedLayout = {
@@ -499,6 +502,7 @@ export default function DraggableWarehouseMap() {
       shelves: updatedShelves,
     }
 
+    console.log("Updated layout:", updatedLayout)
     setLayout(updatedLayout)
 
     // Auto-save the layout
@@ -516,10 +520,15 @@ export default function DraggableWarehouseMap() {
         throw new Error("Failed to save layout")
       }
 
-      // Refresh the shelf modal if it's open
-      if ((window as any).refreshShelfModal) {
-        ;(window as any).refreshShelfModal()
-      }
+      console.log("Layout saved successfully")
+
+      // Force refresh of any open shelf modals
+      setTimeout(() => {
+        if ((window as any).refreshShelfModal) {
+          console.log("Triggering shelf modal refresh")
+          ;(window as any).refreshShelfModal()
+        }
+      }, 100)
     } catch (error) {
       console.error("Error saving layout:", error)
       toast({

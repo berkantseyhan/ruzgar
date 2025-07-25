@@ -669,13 +669,26 @@ export function generateUniqueShelfId(existingShelves: ShelfLayout[]): ShelfId {
 
 // Helper function to get available layers for a shelf
 export function getAvailableLayersForShelf(shelfId: ShelfId, layout?: WarehouseLayout): string[] {
+  console.log(`Getting available layers for shelf: ${shelfId}`)
+  console.log("Layout provided:", !!layout)
+
   // First check if the shelf has custom layers
   if (layout) {
+    console.log(
+      "Layout shelves:",
+      layout.shelves.map((s) => ({ id: s.id, customLayers: s.customLayers })),
+    )
     const shelf = layout.shelves.find((s) => s.id === shelfId)
+    console.log(`Found shelf ${shelfId}:`, shelf)
+
     if (shelf?.customLayers && shelf.customLayers.length > 0) {
       console.log(`Using custom layers for shelf ${shelfId}:`, shelf.customLayers)
       return shelf.customLayers
+    } else {
+      console.log(`No custom layers found for shelf ${shelfId}`)
     }
+  } else {
+    console.log("No layout provided, using default layers")
   }
 
   // Default layers based on shelf type
