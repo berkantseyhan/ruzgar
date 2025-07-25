@@ -673,18 +673,23 @@ export function getAvailableLayersForShelf(shelfId: ShelfId, layout?: WarehouseL
   if (layout) {
     const shelf = layout.shelves.find((s) => s.id === shelfId)
     if (shelf?.customLayers && shelf.customLayers.length > 0) {
+      console.log(`Using custom layers for shelf ${shelfId}:`, shelf.customLayers)
       return shelf.customLayers
     }
   }
 
   // Default layers based on shelf type
+  let defaultLayers: string[]
   if (shelfId === "çıkış yolu") {
-    return ["dayının alanı", "cam kenarı", "tuvalet önü", "merdiven tarafı"]
+    defaultLayers = ["dayının alanı", "cam kenarı", "tuvalet önü", "merdiven tarafı"]
   } else if (shelfId === "orta alan") {
-    return ["a önü", "b önü", "c önü", "mutfak yanı", "tezgah yanı"]
+    defaultLayers = ["a önü", "b önü", "c önü", "mutfak yanı", "tezgah yanı"]
   } else {
-    return ["üst kat", "orta kat", "alt kat"]
+    defaultLayers = ["üst kat", "orta kat", "alt kat"]
   }
+
+  console.log(`Using default layers for shelf ${shelfId}:`, defaultLayers)
+  return defaultLayers
 }
 
 // Simple function to test Redis connectivity

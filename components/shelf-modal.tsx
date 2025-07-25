@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import type { Layer, Product, ShelfId, WarehouseLayout } from "@/lib/redis"
 import { getAvailableLayersForShelf } from "@/lib/redis"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Edit, Trash2, Plus, RefreshCw, Loader2, Package, Layers } from "lucide-react"
@@ -16,9 +16,10 @@ import { Badge } from "@/components/ui/badge"
 interface ShelfModalProps {
   shelfId: ShelfId
   onClose: () => void
+  onRefresh?: () => void // Add this
 }
 
-export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
+export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalProps) {
   const [warehouseLayout, setWarehouseLayout] = useState<WarehouseLayout | null>(null)
   const [availableLayers, setAvailableLayers] = useState<{ value: Layer; label: string }[]>([])
   const [activeLayer, setActiveLayer] = useState<Layer>("üst kat")
@@ -29,6 +30,7 @@ export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
   const [isAddingProduct, setIsAddingProduct] = useState(false)
   const { toast } = useToast()
   const { username } = useAuth()
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // Fetch warehouse layout and set up available layers
   useEffect(() => {
@@ -54,27 +56,34 @@ export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
 
           setAvailableLayers(layerOptions)
 
-          // Set the first available layer as active
+          // Set the first available layer as active, but preserve current if valid
           if (layerOptions.length > 0) {
-            setActiveLayer(layerOptions[0].value)
+            const currentLayerValid = layerOptions.some((layer) => layer.value === activeLayer)
+            if (!currentLayerValid) {
+              setActiveLayer(layerOptions[0].value)
+            }
           }
         } else {
           // Fallback to default layers
           const defaultLayers = getDefaultLayers(shelfId)
           setAvailableLayers(defaultLayers)
-          setActiveLayer(defaultLayers[0]?.value || "üst kat")
+          if (defaultLayers.length > 0 && !defaultLayers.some((layer) => layer.value === activeLayer)) {
+            setActiveLayer(defaultLayers[0].value)
+          }
         }
       } catch (error) {
         console.error("Error fetching layout:", error)
         // Fallback to default layers
         const defaultLayers = getDefaultLayers(shelfId)
         setAvailableLayers(defaultLayers)
-        setActiveLayer(defaultLayers[0]?.value || "üst kat")
+        if (defaultLayers.length > 0 && !defaultLayers.some((layer) => layer.value === activeLayer)) {
+          setActiveLayer(defaultLayers[0].value)
+        }
       }
     }
 
     fetchLayout()
-  }, [shelfId]) // Re-fetch when shelfId changes
+  }, [shelfId, refreshTrigger]) // Add refreshTrigger dependency
 
   // Get default layers based on shelf type (fallback)
   const getDefaultLayers = (shelfId: ShelfId): { value: Layer; label: string }[] => {
@@ -373,9 +382,25 @@ export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
     )
   }
 
+  // Add this function to refresh the modal
+  const refreshModal = () => {
+    setRefreshTrigger((prev) => prev + 1)
+    if (onRefresh) {
+      onRefresh()
+    }
+  }
+
+  // Make refreshModal available globally for this modal
+  useEffect(() => {
+    ;(window as any).refreshShelfModal = refreshModal
+    return () => {
+      delete (window as any).refreshShelfModal
+    }
+  }, [])
+
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl border">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl border">
         <DialogHeader className="pb-2 border-b">
           <DialogTitle className="flex items-center gap-2">
             <span
@@ -388,20 +413,41 @@ export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
         </DialogHeader>
 
         <Tabs value={activeLayer} onValueChange={(value) => setActiveLayer(value as Layer)}>
-          <TabsList className="grid grid-cols-3 mb-6 rounded-lg overflow-hidden shadow-md">
-            {availableLayers.map((layer) => (
-              <TabsTrigger
-                key={layer.value}
-                value={layer.value}
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-200 py-2.5"
-              >
-                <div className="flex items-center gap-1.5">
-                  <Layers className="h-4 w-4" />
-                  {layer.label}
-                </div>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          {/* Improved adaptive tab list */}
+          <div className="mb-6">
+            <div className="w-full bg-muted rounded-lg p-1.5 shadow-sm">
+              <div className="flex flex-wrap gap-1.5 justify-center sm:justify-start">
+                {availableLayers.map((layer) => (
+                  <button
+                    key={layer.value}
+                    onClick={() => setActiveLayer(layer.value)}
+                    className={`
+              flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium text-sm
+              transition-all duration-200 min-w-fit flex-1 sm:flex-none
+              ${
+                activeLayer === layer.value
+                  ? "bg-primary text-primary-foreground shadow-md scale-105"
+                  : "bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }
+            `}
+                    style={{
+                      minWidth: availableLayers.length <= 3 ? "120px" : availableLayers.length <= 5 ? "100px" : "80px",
+                    }}
+                  >
+                    <Layers className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate font-medium">{layer.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Layer count indicator */}
+            <div className="flex justify-center mt-2">
+              <Badge variant="outline" className="text-xs">
+                {availableLayers.length} katman mevcut
+              </Badge>
+            </div>
+          </div>
 
           {availableLayers.map((layer) => (
             <TabsContent key={layer.value} value={layer.value} className="mt-0 animate-fadeIn">

@@ -269,6 +269,55 @@ function DraggableShelf({
   )
 }
 
+// Add this function after the existing helper functions, around line 100
+const calculateAdaptiveLayout = (shelves: ShelfLayout[]): ShelfLayout[] => {
+  if (shelves.length === 0) return shelves
+
+  // Calculate optimal grid dimensions based on shelf count
+  const shelfCount = shelves.length
+  let cols: number
+  let rows: number
+
+  if (shelfCount <= 4) {
+    cols = Math.min(shelfCount, 2)
+    rows = Math.ceil(shelfCount / cols)
+  } else if (shelfCount <= 9) {
+    cols = 3
+    rows = Math.ceil(shelfCount / cols)
+  } else if (shelfCount <= 16) {
+    cols = 4
+    rows = Math.ceil(shelfCount / cols)
+  } else {
+    cols = 5
+    rows = Math.ceil(shelfCount / cols)
+  }
+
+  // Calculate dimensions for each shelf
+  const shelfWidth = Math.max(15, Math.min(25, 90 / cols))
+  const shelfHeight = Math.max(12, Math.min(20, 80 / rows))
+
+  // Calculate spacing
+  const horizontalSpacing = (100 - cols * shelfWidth) / (cols + 1)
+  const verticalSpacing = (100 - rows * shelfHeight) / (rows + 1)
+
+  // Apply adaptive positioning
+  return shelves.map((shelf, index) => {
+    const row = Math.floor(index / cols)
+    const col = index % cols
+
+    const x = horizontalSpacing + col * (shelfWidth + horizontalSpacing)
+    const y = verticalSpacing + row * (shelfHeight + verticalSpacing)
+
+    return {
+      ...shelf,
+      x: Math.max(0, Math.min(95 - shelfWidth, x)),
+      y: Math.max(0, Math.min(95 - shelfHeight, y)),
+      width: shelfWidth,
+      height: shelfHeight,
+    }
+  })
+}
+
 export default function DraggableWarehouseMap() {
   const [layout, setLayout] = useState<WarehouseLayout | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -466,6 +515,11 @@ export default function DraggableWarehouseMap() {
       if (!response.ok) {
         throw new Error("Failed to save layout")
       }
+
+      // Refresh the shelf modal if it's open
+      if ((window as any).refreshShelfModal) {
+        ;(window as any).refreshShelfModal()
+      }
     } catch (error) {
       console.error("Error saving layout:", error)
       toast({
@@ -529,6 +583,49 @@ export default function DraggableWarehouseMap() {
       toast({
         title: "Hata",
         description: "Yeni raf eklenirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAdaptiveLayout = async () => {
+    if (!layout) return
+
+    const adaptiveShelves = calculateAdaptiveLayout(layout.shelves)
+
+    const updatedLayout = {
+      ...layout,
+      shelves: adaptiveShelves,
+    }
+
+    setLayout(updatedLayout)
+
+    // Auto-save the adaptive layout
+    try {
+      setSaving(true)
+      const response = await fetch("/api/layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ layout: updatedLayout }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save layout")
+      }
+
+      toast({
+        title: "Adaptif Düzen Uygulandı",
+        description: `${layout.shelves.length} raf otomatik olarak düzenlendi ve kaydedildi.`,
+      })
+    } catch (error) {
+      console.error("Error saving adaptive layout:", error)
+      toast({
+        title: "Hata",
+        description: "Adaptif düzen kaydedilirken bir hata oluştu.",
         variant: "destructive",
       })
     } finally {
@@ -802,7 +899,7 @@ export default function DraggableWarehouseMap() {
             <p className="text-xs mt-1 opacity-80">
               Mavi: İsim | Mor: Katmanlar | Sürükle: Taşı | Sağ alt: Boyutlandır | Kırmızı X: Sil
               <br />
-              Tüm değişiklikler otomatik kaydedilir
+              Adaptif Düzen: Rafları otomatik olarak düzenler | Tüm değişiklikler otomatik kaydedilir
             </p>
           </div>
         )}
@@ -845,7 +942,16 @@ export default function DraggableWarehouseMap() {
         />
       )}
 
-      {selectedShelf && <ShelfModal shelfId={selectedShelf} onClose={handleCloseModal} />}
+      {selectedShelf && (
+        <ShelfModal
+          shelfId={selectedShelf}
+          onClose={handleCloseModal}
+          onRefresh={() => {
+            // Force re-fetch of layout when modal refreshes
+            fetchLayout()
+          }}
+        />
+      )}
     </div>
   )
 }
