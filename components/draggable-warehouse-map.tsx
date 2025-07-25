@@ -6,9 +6,11 @@ import { useState, useEffect, useRef } from "react"
 import type { ShelfId, ShelfLayout, WarehouseLayout } from "@/lib/redis"
 import { generateUniqueShelfId } from "@/lib/redis"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import { Save, RotateCcw, Lock, Unlock, Grid, Settings, Plus, Trash2 } from "lucide-react"
+import { Save, RotateCcw, Lock, Unlock, Grid, Settings, Plus, Trash2, Edit3, Check, X, Layers } from "lucide-react"
 import ShelfModal from "@/components/shelf-modal"
+import ShelfLayersEditor from "@/components/shelf-layers-editor"
 import ConfirmDialog from "@/components/confirm-dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -19,15 +21,44 @@ interface DraggableShelfProps {
   onUpdate: (shelf: ShelfLayout) => void
   onDelete: (shelfId: ShelfId) => void
   onClick: (shelfId: ShelfId) => void
+  onStartNameEdit: (shelfId: ShelfId) => void
+  onEditLayers: (shelf: ShelfLayout) => void
+  isEditingName: boolean
+  editingName: string
+  onNameChange: (name: string) => void
+  onSaveName: () => void
+  onCancelNameEdit: () => void
 }
 
-function DraggableShelf({ shelf, isEditMode, onUpdate, onDelete, onClick }: DraggableShelfProps) {
+function DraggableShelf({
+  shelf,
+  isEditMode,
+  onUpdate,
+  onDelete,
+  onClick,
+  onStartNameEdit,
+  onEditLayers,
+  isEditingName,
+  editingName,
+  onNameChange,
+  onSaveName,
+  onCancelNameEdit,
+}: DraggableShelfProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [initialPosition, setInitialPosition] = useState({ x: 0, y: 0 })
   const [initialSize, setInitialSize] = useState({ width: 0, height: 0 })
   const shelfRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (isEditingName && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditingName])
 
   const getShelfColor = () => {
     if (shelf.isCommon) return "bg-shelf-common text-white"
@@ -53,8 +84,10 @@ function DraggableShelf({ shelf, isEditMode, onUpdate, onDelete, onClick }: Drag
   }
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!isEditMode) {
-      onClick(shelf.id)
+    if (!isEditMode || isEditingName) {
+      if (!isEditingName) {
+        onClick(shelf.id)
+      }
       return
     }
 
@@ -65,7 +98,7 @@ function DraggableShelf({ shelf, isEditMode, onUpdate, onDelete, onClick }: Drag
   }
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
-    if (!isEditMode) return
+    if (!isEditMode || isEditingName) return
 
     e.preventDefault()
     e.stopPropagation()
@@ -80,9 +113,29 @@ function DraggableShelf({ shelf, isEditMode, onUpdate, onDelete, onClick }: Drag
     onDelete(shelf.id)
   }
 
+  const handleEditNameClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onStartNameEdit(shelf.id)
+  }
+
+  const handleEditLayersClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onEditLayers(shelf)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      onSaveName()
+    } else if (e.key === "Escape") {
+      onCancelNameEdit()
+    }
+  }
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isEditMode) return
+      if (!isEditMode || isEditingName) return
 
       if (isDragging && shelfRef.current) {
         const container = shelfRef.current.parentElement
@@ -127,14 +180,16 @@ function DraggableShelf({ shelf, isEditMode, onUpdate, onDelete, onClick }: Drag
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, shelf, onUpdate, isEditMode])
+  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, shelf, onUpdate, isEditMode, isEditingName])
 
   return (
     <div
       ref={shelfRef}
       className={`absolute rounded-md ${getShelfColor()} flex items-center justify-center font-bold text-sm sm:text-base md:text-lg lg:text-xl transition-all duration-200 ${
-        isEditMode ? "cursor-move border-2 border-dashed border-white/50 shadow-lg" : "cursor-pointer hover:shadow-lg"
-      } ${isDragging ? "z-50 scale-105" : ""} ${isResizing ? "z-50" : ""}`}
+        isEditMode && !isEditingName
+          ? "cursor-move border-2 border-dashed border-white/50 shadow-lg"
+          : "cursor-pointer hover:shadow-lg"
+      } ${isDragging ? "z-50 scale-105" : ""} ${isResizing ? "z-50" : ""} ${isEditingName ? "z-50" : ""}`}
       style={{
         left: `${shelf.x}%`,
         top: `${shelf.y}%`,
@@ -143,10 +198,55 @@ function DraggableShelf({ shelf, isEditMode, onUpdate, onDelete, onClick }: Drag
       }}
       onMouseDown={handleMouseDown}
     >
-      <span className="select-none">{shelf.id}</span>
+      {isEditingName ? (
+        <div className="flex items-center gap-1 px-2" onClick={(e) => e.stopPropagation()}>
+          <Input
+            ref={inputRef}
+            value={editingName}
+            onChange={(e) => onNameChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="h-6 text-xs bg-white text-black border-none p-1 min-w-0 flex-1"
+            style={{ fontSize: "10px" }}
+          />
+          <button
+            className="w-5 h-5 bg-green-500 hover:bg-green-600 text-white rounded flex items-center justify-center transition-colors duration-200"
+            onClick={onSaveName}
+            title="Kaydet"
+          >
+            <Check className="h-3 w-3" />
+          </button>
+          <button
+            className="w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded flex items-center justify-center transition-colors duration-200"
+            onClick={onCancelNameEdit}
+            title="İptal"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ) : (
+        <span className="select-none px-1 text-center break-words">{shelf.id}</span>
+      )}
 
-      {isEditMode && (
+      {isEditMode && !isEditingName && (
         <>
+          {/* Edit name button */}
+          <button
+            className="absolute top-1 left-1 w-6 h-6 bg-blue-500 hover:bg-blue-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 opacity-80 hover:opacity-100"
+            onMouseDown={handleEditNameClick}
+            title="İsmi Düzenle"
+          >
+            <Edit3 className="h-3 w-3" />
+          </button>
+
+          {/* Edit layers button */}
+          <button
+            className="absolute top-1 left-8 w-6 h-6 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 opacity-80 hover:opacity-100"
+            onMouseDown={handleEditLayersClick}
+            title="Katmanları Düzenle"
+          >
+            <Layers className="h-3 w-3" />
+          </button>
+
           {/* Delete button */}
           <button
             className="absolute top-1 right-1 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 opacity-80 hover:opacity-100"
@@ -175,6 +275,9 @@ export default function DraggableWarehouseMap() {
   const [selectedShelf, setSelectedShelf] = useState<ShelfId | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [editingShelfId, setEditingShelfId] = useState<ShelfId | null>(null)
+  const [editingName, setEditingName] = useState("")
+  const [layersEditorShelf, setLayersEditorShelf] = useState<ShelfLayout | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<{
     open: boolean
     shelfId: ShelfId | null
@@ -211,18 +314,178 @@ export default function DraggableWarehouseMap() {
     }
   }
 
-  const handleShelfUpdate = (updatedShelf: ShelfLayout) => {
+  const handleShelfUpdate = async (updatedShelf: ShelfLayout) => {
     if (!layout) return
 
     const updatedShelves = layout.shelves.map((shelf) => (shelf.id === updatedShelf.id ? updatedShelf : shelf))
 
-    setLayout({
+    const updatedLayout = {
       ...layout,
       shelves: updatedShelves,
+    }
+
+    setLayout(updatedLayout)
+
+    // Auto-save the layout when shelf is updated (moved or resized)
+    try {
+      setSaving(true)
+      const response = await fetch("/api/layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ layout: updatedLayout }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save layout")
+      }
+
+      console.log("Layout auto-saved after shelf update")
+    } catch (error) {
+      console.error("Error auto-saving layout:", error)
+      toast({
+        title: "Uyarı",
+        description: "Raf konumu kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleStartNameEdit = (shelfId: ShelfId) => {
+    setEditingShelfId(shelfId)
+    setEditingName(shelfId)
+  }
+
+  const handleNameChange = (name: string) => {
+    setEditingName(name)
+  }
+
+  const handleSaveName = async () => {
+    if (!layout || !editingShelfId || !editingName.trim()) {
+      handleCancelNameEdit()
+      return
+    }
+
+    const trimmedName = editingName.trim()
+
+    // Check if name already exists
+    const nameExists = layout.shelves.some(
+      (shelf) => shelf.id !== editingShelfId && shelf.id.toLowerCase() === trimmedName.toLowerCase(),
+    )
+
+    if (nameExists) {
+      toast({
+        title: "Hata",
+        description: "Bu isim zaten kullanılıyor. Farklı bir isim seçin.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Update shelf name
+    const updatedShelves = layout.shelves.map((shelf) =>
+      shelf.id === editingShelfId ? { ...shelf, id: trimmedName as ShelfId } : shelf,
+    )
+
+    const updatedLayout = {
+      ...layout,
+      shelves: updatedShelves,
+    }
+
+    setLayout(updatedLayout)
+
+    // Auto-save the layout
+    try {
+      setSaving(true)
+      const response = await fetch("/api/layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ layout: updatedLayout }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save layout")
+      }
+
+      toast({
+        title: "İsim Güncellendi",
+        description: `Raf ismi "${editingShelfId}" → "${trimmedName}" olarak değiştirildi.`,
+      })
+    } catch (error) {
+      console.error("Error saving layout:", error)
+      toast({
+        title: "Hata",
+        description: "İsim değişikliği kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+
+    setEditingShelfId(null)
+    setEditingName("")
+  }
+
+  const handleCancelNameEdit = () => {
+    setEditingShelfId(null)
+    setEditingName("")
+  }
+
+  const handleEditLayers = (shelf: ShelfLayout) => {
+    setLayersEditorShelf(shelf)
+  }
+
+  const handleSaveLayers = async (updatedShelf: ShelfLayout) => {
+    if (!layout) return
+
+    const updatedShelves = layout.shelves.map((shelf) => (shelf.id === updatedShelf.id ? updatedShelf : shelf))
+
+    const updatedLayout = {
+      ...layout,
+      shelves: updatedShelves,
+    }
+
+    setLayout(updatedLayout)
+
+    // Auto-save the layout
+    try {
+      setSaving(true)
+      const response = await fetch("/api/layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ layout: updatedLayout }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save layout")
+      }
+    } catch (error) {
+      console.error("Error saving layout:", error)
+      toast({
+        title: "Hata",
+        description: "Katman değişiklikleri kaydedilirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+
+    setLayersEditorShelf(null)
+
+    toast({
+      title: "Katmanlar Güncellendi",
+      description: `${updatedShelf.id} rafının katmanları otomatik kaydedildi.`,
     })
   }
 
-  const handleAddShelf = () => {
+  const handleAddShelf = async () => {
     if (!layout) return
 
     const newShelfId = generateUniqueShelfId(layout.shelves)
@@ -235,15 +498,42 @@ export default function DraggableWarehouseMap() {
       isCommon: false,
     }
 
-    setLayout({
+    const updatedLayout = {
       ...layout,
       shelves: [...layout.shelves, newShelf],
-    })
+    }
 
-    toast({
-      title: "Yeni Raf Eklendi",
-      description: `${newShelfId} rafı eklendi. Konumunu ve boyutunu ayarlayabilirsiniz.`,
-    })
+    setLayout(updatedLayout)
+
+    // Automatically save the layout
+    try {
+      setSaving(true)
+      const response = await fetch("/api/layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ layout: updatedLayout }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save layout")
+      }
+
+      toast({
+        title: "Yeni Raf Eklendi",
+        description: `${newShelfId} rafı eklendi ve otomatik kaydedildi.`,
+      })
+    } catch (error) {
+      console.error("Error saving layout:", error)
+      toast({
+        title: "Hata",
+        description: "Yeni raf eklenirken bir hata oluştu.",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDeleteShelf = async (shelfId: ShelfId) => {
@@ -362,7 +652,7 @@ export default function DraggableWarehouseMap() {
   }
 
   const handleShelfClick = (shelfId: ShelfId) => {
-    if (!isEditMode) {
+    if (!isEditMode && !editingShelfId) {
       setSelectedShelf(shelfId)
     }
   }
@@ -408,7 +698,9 @@ export default function DraggableWarehouseMap() {
             Depo Yerleşim Planı
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {isEditMode ? "Rafları sürükleyerek konumlarını değiştirin" : "Raf detaylarını görmek için tıklayın"}
+            {isEditMode
+              ? "Rafları sürükleyin, boyutlandırın, isimlerini ve katmanlarını düzenleyin"
+              : "Raf detaylarını görmek için tıklayın"}
           </p>
         </div>
 
@@ -422,6 +714,7 @@ export default function DraggableWarehouseMap() {
             size="sm"
             onClick={() => setIsEditMode(!isEditMode)}
             className="flex items-center gap-2"
+            disabled={!!editingShelfId}
           >
             {isEditMode ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
             {isEditMode ? "Kilitle" : "Düzenle"}
@@ -433,6 +726,7 @@ export default function DraggableWarehouseMap() {
                 variant="outline"
                 size="sm"
                 onClick={handleAddShelf}
+                disabled={!!editingShelfId}
                 className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
               >
                 <Plus className="h-4 w-4" />
@@ -443,6 +737,7 @@ export default function DraggableWarehouseMap() {
                 variant="outline"
                 size="sm"
                 onClick={handleResetLayout}
+                disabled={!!editingShelfId}
                 className="flex items-center gap-2 bg-transparent"
               >
                 <RotateCcw className="h-4 w-4" />
@@ -452,7 +747,7 @@ export default function DraggableWarehouseMap() {
               <Button
                 size="sm"
                 onClick={handleSaveLayout}
-                disabled={saving}
+                disabled={saving || !!editingShelfId}
                 className="flex items-center gap-2 bg-primary"
               >
                 <Save className="h-4 w-4" />
@@ -487,6 +782,13 @@ export default function DraggableWarehouseMap() {
             onUpdate={handleShelfUpdate}
             onDelete={handleDeleteShelf}
             onClick={handleShelfClick}
+            onStartNameEdit={handleStartNameEdit}
+            onEditLayers={handleEditLayers}
+            isEditingName={editingShelfId === shelf.id}
+            editingName={editingName}
+            onNameChange={handleNameChange}
+            onSaveName={handleSaveName}
+            onCancelNameEdit={handleCancelNameEdit}
           />
         ))}
 
@@ -497,7 +799,11 @@ export default function DraggableWarehouseMap() {
               <Settings className="h-4 w-4" />
               <span>Düzenleme Modu Aktif</span>
             </div>
-            <p className="text-xs mt-1 opacity-80">Sürükle: Taşı | Sağ alt: Boyutlandır | Kırmızı X: Sil</p>
+            <p className="text-xs mt-1 opacity-80">
+              Mavi: İsim | Mor: Katmanlar | Sürükle: Taşı | Sağ alt: Boyutlandır | Kırmızı X: Sil
+              <br />
+              Tüm değişiklikler otomatik kaydedilir
+            </p>
           </div>
         )}
 
@@ -528,6 +834,16 @@ export default function DraggableWarehouseMap() {
         variant="destructive"
         onConfirm={confirmDeleteShelf}
       />
+
+      {/* Layers editor dialog */}
+      {layersEditorShelf && (
+        <ShelfLayersEditor
+          open={!!layersEditorShelf}
+          onOpenChange={(open) => !open && setLayersEditorShelf(null)}
+          shelf={layersEditorShelf}
+          onSave={handleSaveLayers}
+        />
+      )}
 
       {selectedShelf && <ShelfModal shelfId={selectedShelf} onClose={handleCloseModal} />}
     </div>

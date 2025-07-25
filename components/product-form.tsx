@@ -4,7 +4,8 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { v4 as uuidv4 } from "uuid"
-import type { Product, ShelfId, Layer } from "@/lib/redis"
+import type { Product, ShelfId, Layer, WarehouseLayout } from "@/lib/redis"
+import { getAvailableLayersForShelf } from "@/lib/redis"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -24,6 +25,9 @@ interface ProductFormProps {
 }
 
 export default function ProductForm({ initialData, onSuccess, onCancel }: ProductFormProps) {
+  const [availableShelves, setAvailableShelves] = useState<{ value: string; label: string }[]>([])
+  const [warehouseLayout, setWarehouseLayout] = useState<WarehouseLayout | null>(null)
+  const [loadingShelves, setLoadingShelves] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const { toast } = useToast()
@@ -45,32 +49,106 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
 
   // Get available layers based on selected shelf
   const getAvailableLayers = (shelfId: string): { value: string; label: string }[] => {
-    if (shelfId === "çıkış yolu") {
-      return [
-        { value: "dayının alanı", label: "Dayının Alanı" },
-        { value: "cam kenarı", label: "Cam Kenarı" },
-        { value: "tuvalet önü", label: "Tuvalet Önü" },
-        { value: "merdiven tarafı", label: "Merdiven Tarafı" },
-      ]
-    } else if (shelfId === "orta alan") {
-      return [
-        { value: "a önü", label: "A Önü" },
-        { value: "b önü", label: "B Önü" },
-        { value: "c önü", label: "C Önü" },
-        { value: "mutfak yanı", label: "Mutfak Yanı" },
-        { value: "tezgah yanı", label: "Tezgah Yanı" },
-      ]
-    } else {
-      return [
-        { value: "üst kat", label: "Üst Kat" },
-        { value: "orta kat", label: "Orta Kat" },
-        { value: "alt kat", label: "Alt Kat" },
-      ]
+    if (!warehouseLayout) {
+      // Fallback to default layers if layout is not loaded
+      if (shelfId === "çıkış yolu") {
+        return [
+          { value: "dayının alanı", label: "Dayının Alanı" },
+          { value: "cam kenarı", label: "Cam Kenarı" },
+          { value: "tuvalet önü", label: "Tuvalet Önü" },
+          { value: "merdiven tarafı", label: "Merdiven Tarafı" },
+        ]
+      } else if (shelfId === "orta alan") {
+        return [
+          { value: "a önü", label: "A Önü" },
+          { value: "b önü", label: "B Önü" },
+          { value: "c önü", label: "C Önü" },
+          { value: "mutfak yanı", label: "Mutfak Yanı" },
+          { value: "tezgah yanı", label: "Tezgah Yanı" },
+        ]
+      } else {
+        return [
+          { value: "üst kat", label: "Üst Kat" },
+          { value: "orta kat", label: "Orta Kat" },
+          { value: "alt kat", label: "Alt Kat" },
+        ]
+      }
     }
+
+    // Use the helper function from redis.ts
+    const layers = getAvailableLayersForShelf(shelfId as ShelfId, warehouseLayout)
+    return layers.map((layer) => ({
+      value: layer,
+      label: layer.charAt(0).toUpperCase() + layer.slice(1), // Capitalize first letter
+    }))
   }
 
   // Get current available layers
   const availableLayers = getAvailableLayers(formData.rafNo)
+
+  // Fetch available shelves from layout
+  useEffect(() => {
+    const fetchShelves = async () => {
+      try {
+        setLoadingShelves(true)
+        const response = await fetch("/api/layout", {
+          method: "GET",
+          headers: {
+            "Cache-Control": "no-cache", // Force fresh data
+          },
+        })
+        if (response.ok) {
+          const data = await response.json()
+          const layout: WarehouseLayout = data.layout
+          setWarehouseLayout(layout)
+
+          const shelves = layout.shelves
+            .filter((shelf) => shelf.id && shelf.id.trim() !== "") // Filter out empty IDs
+            .map((shelf) => ({
+              value: shelf.id,
+              label: shelf.id,
+            }))
+
+          setAvailableShelves(shelves)
+          console.log(
+            "Loaded shelves:",
+            shelves.map((s) => s.label),
+          )
+        } else {
+          // Fallback to default shelves if API fails
+          setAvailableShelves([
+            { value: "A", label: "A" },
+            { value: "B", label: "B" },
+            { value: "C", label: "C" },
+            { value: "D", label: "D" },
+            { value: "E", label: "E" },
+            { value: "F", label: "F" },
+            { value: "G", label: "G" },
+            { value: "orta alan", label: "Orta Alan" },
+            { value: "çıkış yolu", label: "Çıkış Yolu" },
+          ])
+        }
+      } catch (error) {
+        console.error("Error fetching shelves:", error)
+        // Fallback to default shelves
+        setAvailableShelves([
+          { value: "A", label: "A" },
+          { value: "B", label: "B" },
+          { value: "C", label: "C" },
+          { value: "D", label: "D" },
+          { value: "E", label: "E" },
+          { value: "F", label: "F" },
+          { value: "G", label: "G" },
+          { value: "orta alan", label: "Orta Alan" },
+          { value: "çıkış yolu", label: "Çıkış Yolu" },
+        ])
+      } finally {
+        setLoadingShelves(false)
+      }
+    }
+
+    fetchShelves()
+  }, [])
 
   // Effect to reset layer when shelf changes
   useEffect(() => {
@@ -81,21 +159,21 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
       const isCurrentLayerValid = layers.some((layer) => layer.value === formData.katman)
 
       // If not valid, reset to the first available layer
-      if (!isCurrentLayerValid) {
+      if (!isCurrentLayerValid && layers.length > 0) {
         setFormData((prev) => ({
           ...prev,
-          katman: layers.length > 0 ? layers[0].value : "",
+          katman: layers[0].value,
         }))
       }
     }
-  }, [formData.rafNo])
+  }, [formData.rafNo, warehouseLayout])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.urunAdi) newErrors.urunAdi = "Ürün adı gereklidir"
+    if (!formData.urunAdi.trim()) newErrors.urunAdi = "Ürün adı gereklidir"
     if (!formData.kategori) newErrors.kategori = "Kategori gereklidir"
-    if (!formData.olcu) newErrors.olcu = "Ölçü gereklidir"
+    if (!formData.olcu.trim()) newErrors.olcu = "Ölçü gereklidir"
 
     // Only validate shelf and layer when creating a new product
     if (!initialData?.id) {
@@ -137,14 +215,14 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
     try {
       const productData: Product = {
         id: initialData?.id || uuidv4(),
-        urunAdi: formData.urunAdi,
+        urunAdi: formData.urunAdi.trim(),
         kategori: formData.kategori,
-        olcu: formData.olcu,
+        olcu: formData.olcu.trim(),
         // When editing, preserve the original shelf and layer values
         rafNo: initialData?.id ? (initialData.rafNo as ShelfId) : (formData.rafNo as ShelfId),
         katman: initialData?.id ? (initialData.katman as Layer) : (formData.katman as Layer),
         kilogram: formData.kilogram,
-        notlar: formData.notlar,
+        notlar: formData.notlar.trim(),
         createdAt: initialData?.createdAt || Date.now(),
       }
 
@@ -284,7 +362,10 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
               <Label htmlFor="kategori" className="font-medium">
                 Kategori
               </Label>
-              <Select value={formData.kategori} onValueChange={(value) => handleSelectChange("kategori", value)}>
+              <Select
+                value={formData.kategori || undefined}
+                onValueChange={(value) => handleSelectChange("kategori", value)}
+              >
                 <SelectTrigger id="kategori" className="shadow-sm focus:ring-2 focus:ring-primary/20 transition-all">
                   <SelectValue placeholder="Kategori seçin" />
                 </SelectTrigger>
@@ -340,20 +421,25 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
                   <Label htmlFor="rafNo" className="font-medium">
                     Raf No
                   </Label>
-                  <Select value={formData.rafNo} onValueChange={(value) => handleSelectChange("rafNo", value)}>
+                  <Select
+                    value={formData.rafNo || undefined}
+                    onValueChange={(value) => handleSelectChange("rafNo", value)}
+                  >
                     <SelectTrigger id="rafNo" className="shadow-sm focus:ring-2 focus:ring-primary/20 transition-all">
-                      <SelectValue placeholder="Raf seçin" />
+                      <SelectValue placeholder={loadingShelves ? "Raflar yükleniyor..." : "Raf seçin"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="A">A</SelectItem>
-                      <SelectItem value="B">B</SelectItem>
-                      <SelectItem value="C">C</SelectItem>
-                      <SelectItem value="D">D</SelectItem>
-                      <SelectItem value="E">E</SelectItem>
-                      <SelectItem value="F">F</SelectItem>
-                      <SelectItem value="G">G</SelectItem>
-                      <SelectItem value="orta alan">Orta Alan</SelectItem>
-                      <SelectItem value="çıkış yolu">Çıkış Yolu</SelectItem>
+                      {loadingShelves ? (
+                        <div className="p-2 text-sm text-muted-foreground">Raflar yükleniyor...</div>
+                      ) : availableShelves.length > 0 ? (
+                        availableShelves.map((shelf) => (
+                          <SelectItem key={shelf.value} value={shelf.value}>
+                            {shelf.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="p-2 text-sm text-muted-foreground">Raf bulunamadı</div>
+                      )}
                     </SelectContent>
                   </Select>
                   {errors.rafNo && <p className="text-sm text-destructive mt-1">{errors.rafNo}</p>}
@@ -363,16 +449,23 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
                   <Label htmlFor="katman" className="font-medium">
                     Katman
                   </Label>
-                  <Select value={formData.katman} onValueChange={(value) => handleSelectChange("katman", value)}>
+                  <Select
+                    value={formData.katman || undefined}
+                    onValueChange={(value) => handleSelectChange("katman", value)}
+                  >
                     <SelectTrigger id="katman" className="shadow-sm focus:ring-2 focus:ring-primary/20 transition-all">
                       <SelectValue placeholder="Katman seçin" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableLayers.map((layer) => (
-                        <SelectItem key={layer.value} value={layer.value}>
-                          {layer.label}
-                        </SelectItem>
-                      ))}
+                      {availableLayers.length > 0 ? (
+                        availableLayers.map((layer) => (
+                          <SelectItem key={layer.value} value={layer.value}>
+                            {layer.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="p-2 text-sm text-muted-foreground">Önce raf seçin</div>
+                      )}
                     </SelectContent>
                   </Select>
                   {errors.katman && <p className="text-sm text-destructive mt-1">{errors.katman}</p>}
@@ -412,7 +505,7 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
                 type="button"
                 variant="outline"
                 onClick={onCancel}
-                className="shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+                className="shadow-sm hover:shadow-md transition-all flex items-center gap-2 bg-transparent"
               >
                 <X className="h-4 w-4" />
                 İptal

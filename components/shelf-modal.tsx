@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import type { Layer, Product, ShelfId } from "@/lib/redis"
+import type { Layer, Product, ShelfId, WarehouseLayout } from "@/lib/redis"
+import { getAvailableLayersForShelf } from "@/lib/redis"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -18,8 +19,65 @@ interface ShelfModalProps {
 }
 
 export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
-  // Get available layers based on selected shelf
-  const getAvailableLayers = (shelfId: ShelfId): { value: Layer; label: string }[] => {
+  const [warehouseLayout, setWarehouseLayout] = useState<WarehouseLayout | null>(null)
+  const [availableLayers, setAvailableLayers] = useState<{ value: Layer; label: string }[]>([])
+  const [activeLayer, setActiveLayer] = useState<Layer>("üst kat")
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [isAddingProduct, setIsAddingProduct] = useState(false)
+  const { toast } = useToast()
+  const { username } = useAuth()
+
+  // Fetch warehouse layout and set up available layers
+  useEffect(() => {
+    const fetchLayout = async () => {
+      try {
+        const response = await fetch("/api/layout", {
+          method: "GET",
+          headers: {
+            "Cache-Control": "no-cache", // Force fresh data
+          },
+        })
+        if (response.ok) {
+          const data = await response.json()
+          const layout: WarehouseLayout = data.layout
+          setWarehouseLayout(layout)
+
+          // Get available layers for this shelf
+          const layers = getAvailableLayersForShelf(shelfId, layout)
+          const layerOptions = layers.map((layer) => ({
+            value: layer as Layer,
+            label: layer.charAt(0).toUpperCase() + layer.slice(1),
+          }))
+
+          setAvailableLayers(layerOptions)
+
+          // Set the first available layer as active
+          if (layerOptions.length > 0) {
+            setActiveLayer(layerOptions[0].value)
+          }
+        } else {
+          // Fallback to default layers
+          const defaultLayers = getDefaultLayers(shelfId)
+          setAvailableLayers(defaultLayers)
+          setActiveLayer(defaultLayers[0]?.value || "üst kat")
+        }
+      } catch (error) {
+        console.error("Error fetching layout:", error)
+        // Fallback to default layers
+        const defaultLayers = getDefaultLayers(shelfId)
+        setAvailableLayers(defaultLayers)
+        setActiveLayer(defaultLayers[0]?.value || "üst kat")
+      }
+    }
+
+    fetchLayout()
+  }, [shelfId]) // Re-fetch when shelfId changes
+
+  // Get default layers based on shelf type (fallback)
+  const getDefaultLayers = (shelfId: ShelfId): { value: Layer; label: string }[] => {
     if (shelfId === "çıkış yolu") {
       return [
         { value: "dayının alanı", label: "Dayının Alanı" },
@@ -43,22 +101,6 @@ export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
       ]
     }
   }
-
-  const availableLayers = getAvailableLayers(shelfId)
-  const [activeLayer, setActiveLayer] = useState<Layer>(availableLayers[0]?.value || "üst kat")
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
-  const [isAddingProduct, setIsAddingProduct] = useState(false)
-  const { toast } = useToast()
-  const { username } = useAuth()
-
-  // Update activeLayer when shelfId changes
-  useEffect(() => {
-    const layers = getAvailableLayers(shelfId)
-    setActiveLayer(layers[0]?.value || "üst kat")
-  }, [shelfId])
 
   const fetchProducts = async () => {
     setLoading(true)
@@ -108,7 +150,9 @@ export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
   }
 
   useEffect(() => {
-    fetchProducts()
+    if (activeLayer) {
+      fetchProducts()
+    }
   }, [shelfId, activeLayer])
 
   const handleDeleteProduct = async (product: Product) => {
@@ -231,7 +275,12 @@ export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
           </div>
           <div className="flex gap-2">
             {error && (
-              <Button onClick={fetchProducts} size="sm" variant="outline" className="transition-colors duration-200">
+              <Button
+                onClick={fetchProducts}
+                size="sm"
+                variant="outline"
+                className="transition-colors duration-200 bg-transparent"
+              >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Yenile
               </Button>
@@ -261,7 +310,7 @@ export default function ShelfModal({ shelfId, onClose }: ShelfModalProps) {
               onClick={handleAddClick}
               variant="outline"
               size="sm"
-              className="mt-2 transition-colors duration-200"
+              className="mt-2 transition-colors duration-200 bg-transparent"
             >
               <Plus className="h-4 w-4 mr-2" />
               Ürün Ekle

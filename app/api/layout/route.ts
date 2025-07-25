@@ -25,10 +25,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Layout data is required" }, { status: 400 })
     }
 
-    const success = await saveWarehouseLayout(layout as WarehouseLayout)
+    // Validate layout structure
+    if (!layout.shelves || !Array.isArray(layout.shelves)) {
+      return NextResponse.json({ error: "Invalid layout structure" }, { status: 400 })
+    }
+
+    // Ensure each shelf has required properties
+    const validatedLayout = {
+      ...layout,
+      shelves: layout.shelves.map((shelf: any) => ({
+        id: shelf.id,
+        x: Number(shelf.x) || 0,
+        y: Number(shelf.y) || 0,
+        width: Number(shelf.width) || 15,
+        height: Number(shelf.height) || 15,
+        isCommon: Boolean(shelf.isCommon),
+      })),
+      updatedAt: Date.now(),
+    }
+
+    console.log(
+      "Saving layout with shelves:",
+      validatedLayout.shelves.map((s) => s.id),
+    )
+
+    const success = await saveWarehouseLayout(validatedLayout as WarehouseLayout)
 
     if (success) {
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, layout: validatedLayout })
     } else {
       return NextResponse.json({ error: "Failed to save warehouse layout" }, { status: 500 })
     }

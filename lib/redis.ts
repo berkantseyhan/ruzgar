@@ -150,6 +150,7 @@ export interface ShelfLayout {
   width: number // Width as percentage
   height: number // Height as percentage
   isCommon?: boolean
+  customLayers?: string[] // Custom layers for this shelf
 }
 
 export interface WarehouseLayout {
@@ -664,6 +665,26 @@ export function generateUniqueShelfId(existingShelves: ShelfLayout[]): ShelfId {
 
   // Fallback
   return `Raf${Date.now()}` as ShelfId
+}
+
+// Helper function to get available layers for a shelf
+export function getAvailableLayersForShelf(shelfId: ShelfId, layout?: WarehouseLayout): string[] {
+  // First check if the shelf has custom layers
+  if (layout) {
+    const shelf = layout.shelves.find((s) => s.id === shelfId)
+    if (shelf?.customLayers && shelf.customLayers.length > 0) {
+      return shelf.customLayers
+    }
+  }
+
+  // Default layers based on shelf type
+  if (shelfId === "çıkış yolu") {
+    return ["dayının alanı", "cam kenarı", "tuvalet önü", "merdiven tarafı"]
+  } else if (shelfId === "orta alan") {
+    return ["a önü", "b önü", "c önü", "mutfak yanı", "tezgah yanı"]
+  } else {
+    return ["üst kat", "orta kat", "alt kat"]
+  }
 }
 
 // Simple function to test Redis connectivity
