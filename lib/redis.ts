@@ -142,6 +142,53 @@ export interface TransactionLog {
   productDetails?: Partial<Product> // Product details for add/delete actions
 }
 
+// Layout interfaces for warehouse map
+export interface ShelfLayout {
+  id: ShelfId
+  x: number // Position X as percentage
+  y: number // Position Y as percentage
+  width: number // Width as percentage
+  height: number // Height as percentage
+  isCommon?: boolean
+}
+
+export interface WarehouseLayout {
+  id: string
+  name: string
+  shelves: ShelfLayout[]
+  createdAt: number
+  updatedAt: number
+}
+
+// Default warehouse layout
+const defaultLayout: WarehouseLayout = {
+  id: "default",
+  name: "Varsayılan Layout",
+  shelves: [
+    // Top row: E, çıkış yolu, G
+    { id: "E", x: 5, y: 5, width: 25, height: 15 },
+    { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, isCommon: true },
+    { id: "G", x: 70, y: 5, width: 25, height: 15 },
+
+    // Middle row: D, F
+    { id: "D", x: 5, y: 25, width: 25, height: 15 },
+    { id: "F", x: 70, y: 25, width: 25, height: 15 },
+
+    // Middle row: B and C
+    { id: "B", x: 20, y: 45, width: 20, height: 15 },
+    { id: "C", x: 45, y: 45, width: 20, height: 15 },
+
+    // Bottom row: A and orta alan
+    { id: "A", x: 5, y: 55, width: 10, height: 40 },
+    { id: "orta alan", x: 20, y: 75, width: 75, height: 20, isCommon: true },
+  ],
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+}
+
+// Mock data for layouts
+let mockLayout: WarehouseLayout = { ...defaultLayout }
+
 // Mock logs for development
 const mockLogs: TransactionLog[] = []
 
@@ -497,6 +544,126 @@ export async function getTransactionLogs(): Promise<TransactionLog[]> {
     console.error("Redis error in getTransactionLogs:", error)
     return []
   }
+}
+
+// Layout management functions
+export async function getWarehouseLayout(): Promise<WarehouseLayout> {
+  // Use mock data if Redis is not available or in development mode
+  if (!redis || isDev) {
+    console.log("Using mock data to get warehouse layout")
+    return mockLayout
+  }
+
+  try {
+    const layout = await redis.get<WarehouseLayout>("warehouse_layout")
+    return layout || defaultLayout
+  } catch (error) {
+    console.error("Redis error in getWarehouseLayout:", error)
+    return defaultLayout
+  }
+}
+
+export async function saveWarehouseLayout(layout: WarehouseLayout): Promise<boolean> {
+  // Use mock data if Redis is not available or in development mode
+  if (!redis || isDev) {
+    console.log("Using mock data to save warehouse layout")
+    mockLayout = { ...layout, updatedAt: Date.now() }
+    return true
+  }
+
+  try {
+    const updatedLayout = { ...layout, updatedAt: Date.now() }
+    await redis.set("warehouse_layout", updatedLayout)
+    return true
+  } catch (error) {
+    console.error("Redis error in saveWarehouseLayout:", error)
+    return false
+  }
+}
+
+export async function resetWarehouseLayout(): Promise<boolean> {
+  // Use mock data if Redis is not available or in development mode
+  if (!redis || isDev) {
+    console.log("Using mock data to reset warehouse layout")
+    mockLayout = { ...defaultLayout, updatedAt: Date.now() }
+    return true
+  }
+
+  try {
+    const resetLayout = { ...defaultLayout, updatedAt: Date.now() }
+    await redis.set("warehouse_layout", resetLayout)
+    return true
+  } catch (error) {
+    console.error("Redis error in resetWarehouseLayout:", error)
+    return false
+  }
+}
+
+// Add this function after the existing layout functions:
+
+export async function getProductCountByShelf(shelfId: ShelfId): Promise<number> {
+  const layers: Layer[] = [
+    "üst kat",
+    "orta kat",
+    "alt kat",
+    "dayının alanı",
+    "cam kenarı",
+    "tuvalet önü",
+    "merdiven tarafı",
+    "a önü",
+    "b önü",
+    "c önü",
+    "mutfak yanı",
+    "tezgah yanı",
+  ]
+
+  // Use mock data if Redis is not available or in development mode
+  if (!redis || isDev) {
+    console.log(`Using mock data to count products for shelf: ${shelfId}`)
+    let count = 0
+    for (const layer of layers) {
+      const products = getMockProductsByShelfAndLayer(shelfId, layer)
+      count += products.length
+    }
+    return count
+  }
+
+  try {
+    let totalCount = 0
+    for (const layer of layers) {
+      const products = await getProductsByShelfAndLayer(shelfId, layer)
+      totalCount += products.length
+    }
+    return totalCount
+  } catch (error) {
+    console.error("Redis error in getProductCountByShelf:", error)
+    return 0
+  }
+}
+
+// Add function to generate unique shelf ID
+export function generateUniqueShelfId(existingShelves: ShelfLayout[]): ShelfId {
+  const existingIds = existingShelves.map((shelf) => shelf.id)
+
+  // Try letters first
+  for (let i = 65; i <= 90; i++) {
+    // A-Z
+    const letter = String.fromCharCode(i) as ShelfId
+    if (!existingIds.includes(letter)) {
+      return letter
+    }
+  }
+
+  // If all letters are used, try numbers
+  for (let i = 1; i <= 99; i++) {
+    const numberId = `${i}` as ShelfId
+    if (!existingIds.includes(numberId)) {
+      return numberId
+    }
+  }
+
+  // Fallback
+  return `Raf${Date.now()}` as ShelfId
 }
 
 // Simple function to test Redis connectivity
