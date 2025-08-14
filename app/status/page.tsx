@@ -1,267 +1,297 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, RefreshCw, Database, Wifi, AlertTriangle } from "lucide-react"
+import { RefreshCw, Database, Server, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 
 interface SystemStatus {
-  status: string
-  message: string
-  connection: {
-    success: boolean
-    message: string
-  }
-  mode: string
   timestamp: string
-  tables?: string[]
+  status: "healthy" | "degraded" | "error"
+  mode: "supabase" | "mock" | "error"
+  database: {
+    connected: boolean
+    message: string
+    tables: string[]
+  }
+  environment: {
+    nodeEnv: string
+    hasSupabaseUrl: boolean
+    hasSupabaseKey: boolean
+  }
 }
 
 export default function StatusPage() {
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
-  const checkStatus = async () => {
-    setLoading(true)
-    setError(null)
-
+  const fetchStatus = async () => {
     try {
-      const response = await fetch("/api/test")
+      setLoading(true)
+      const response = await fetch("/api/test", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      })
       const data = await response.json()
-
-      if (response.ok) {
-        setStatus(data)
-      } else {
-        setError(data.message || "Test failed")
-        setStatus(data)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error")
-      setStatus(null)
+      setStatus(data)
+      setLastUpdated(new Date())
+    } catch (error) {
+      console.error("Failed to fetch status:", error)
+      setStatus({
+        timestamp: new Date().toISOString(),
+        status: "error",
+        mode: "error",
+        database: {
+          connected: false,
+          message: "Failed to fetch system status",
+          tables: [],
+        },
+        environment: {
+          nodeEnv: "unknown",
+          hasSupabaseUrl: false,
+          hasSupabaseKey: false,
+        },
+      })
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    checkStatus()
+    fetchStatus()
   }, [])
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "healthy":
+        return <CheckCircle className="h-5 w-5 text-green-500" />
+      case "degraded":
+        return <AlertCircle className="h-5 w-5 text-yellow-500" />
+      case "error":
+        return <XCircle className="h-5 w-5 text-red-500" />
+      default:
+        return <AlertCircle className="h-5 w-5 text-gray-500" />
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "healthy":
+        return "bg-green-100 text-green-800"
+      case "degraded":
+        return "bg-yellow-100 text-yellow-800"
+      case "error":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getModeColor = (mode: string) => {
+    switch (mode) {
+      case "supabase":
+        return "bg-blue-100 text-blue-800"
+      case "mock":
+        return "bg-purple-100 text-purple-800"
+      case "error":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Sistem Durumu</h1>
-        <p className="text-muted-foreground">Depo Rüzgar yönetim sisteminin mevcut durumu ve bağlantı bilgileri</p>
-      </div>
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Sistem Durumu</h1>
+            <p className="text-gray-600 mt-1">Depo Rüzgar Uygulaması - Sistem Sağlık Kontrolü</p>
+          </div>
+          <Button
+            onClick={fetchStatus}
+            disabled={loading}
+            variant="outline"
+            className="flex items-center gap-2 bg-transparent"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Yenile
+          </Button>
+        </div>
 
-      <div className="grid gap-6">
-        {/* Ana Durum Kartı */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <div>
-              <CardTitle className="text-2xl">Sistem Durumu</CardTitle>
-              <CardDescription>
-                Son kontrol: {status?.timestamp ? new Date(status.timestamp).toLocaleString("tr-TR") : "Bilinmiyor"}
-              </CardDescription>
-            </div>
-            <Button onClick={checkStatus} disabled={loading} size="sm">
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-              Yenile
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-2">
-              {loading ? (
-                <>
-                  <RefreshCw className="h-5 w-5 animate-spin text-blue-500" />
-                  <span className="text-lg">Kontrol ediliyor...</span>
-                </>
-              ) : error && !status ? (
-                <>
-                  <XCircle className="h-5 w-5 text-red-500" />
-                  <span className="text-lg text-red-600">Hata: {error}</span>
-                </>
-              ) : status?.status === "success" ? (
-                <>
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                  <span className="text-lg text-green-600">Sistem Çalışıyor</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="h-5 w-5 text-red-500" />
-                  <span className="text-lg text-red-600">Sistem Hatası</span>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Çalışma Modu */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5" />
-              Çalışma Modu
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-lg font-medium">Supabase PostgreSQL</p>
-                <p className="text-sm text-muted-foreground">Sistem Supabase veritabanı ile çalışıyor</p>
-              </div>
-              <Badge variant="default" className="bg-green-100 text-green-800">
-                <Wifi className="h-3 w-3 mr-1" />
-                ONLINE
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Veritabanı Tabloları */}
-        {status?.tables && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5" />
-                Depo Rüzgar Tabloları
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {status.tables.map((table) => (
-                  <div key={table} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div>
-                      <p className="font-medium">{table}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {table.includes("Products") && "Ürün verileri"}
-                        {table.includes("Transaction_Logs") && "İşlem kayıtları"}
-                        {table.includes("Warehouse_Layouts") && "Depo düzeni"}
-                        {table.includes("Auth_Passwords") && "Kimlik doğrulama"}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Aktif
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Bağlantı Durumu */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wifi className="h-5 w-5" />
-              Veritabanı Bağlantısı
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">Supabase PostgreSQL</p>
-                  <p className="text-sm text-muted-foreground">Ana veritabanı bağlantısı</p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={
-                    status?.connection?.success
-                      ? "bg-green-50 text-green-700 border-green-200"
-                      : "bg-red-50 text-red-700 border-red-200"
-                  }
-                >
-                  {status?.connection?.success ? (
-                    <>
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Bağlı
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="h-3 w-3 mr-1" />
-                      Hata
-                    </>
-                  )}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Sistem Mesajları */}
         {status && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Sistem Mesajları</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div
-                  className={`p-3 border rounded-lg ${
-                    status.status === "success" ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
-                  }`}
-                >
-                  <p
-                    className={`text-sm font-medium ${status.status === "success" ? "text-green-800" : "text-red-800"}`}
-                  >
-                    Sistem Mesajı:
-                  </p>
-                  <p className={`text-sm ${status.status === "success" ? "text-green-700" : "text-red-700"}`}>
-                    {status.message}
-                  </p>
+          <>
+            {/* Overall Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {getStatusIcon(status.status)}
+                  Genel Durum
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <Badge className={getStatusColor(status.status)}>{status.status.toUpperCase()}</Badge>
+                  <Badge className={getModeColor(status.mode)}>
+                    {status.mode === "supabase" && "Supabase Modu"}
+                    {status.mode === "mock" && "Mock Data Modu"}
+                    {status.mode === "error" && "Hata Modu"}
+                  </Badge>
+                  {lastUpdated && (
+                    <span className="text-sm text-gray-500">
+                      Son güncelleme: {lastUpdated.toLocaleTimeString("tr-TR")}
+                    </span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Database Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="h-5 w-5" />
+                  Veritabanı Durumu
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2">
+                  {status.database.connected ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  )}
+                  <span className="font-medium">{status.database.connected ? "Bağlı" : "Bağlantı Yok"}</span>
                 </div>
 
-                {status.connection && (
-                  <div
-                    className={`p-3 border rounded-lg ${
-                      status.connection.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
-                    }`}
-                  >
-                    <p
-                      className={`text-sm font-medium ${status.connection.success ? "text-green-800" : "text-red-800"}`}
-                    >
-                      Bağlantı Durumu:
-                    </p>
-                    <p className={`text-sm ${status.connection.success ? "text-green-700" : "text-red-700"}`}>
-                      {status.connection.message}
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-sm text-gray-700">{status.database.message}</p>
+                </div>
+
+                {status.database.tables.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-2">Mevcut Tablolar:</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {status.database.tables.map((table) => (
+                        <Badge key={table} variant="outline">
+                          {table}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Environment Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Server className="h-5 w-5" />
+                  Ortam Bilgileri
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Node.js Ortamı:</span>
+                    <Badge variant="outline">{status.environment.nodeEnv}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Supabase URL:</span>
+                    {status.environment.hasSupabaseUrl ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Supabase Key:</span>
+                    {status.environment.hasSupabaseKey ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500" />
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Mode Explanation */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Mod Açıklaması</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {status.mode === "supabase" && (
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-blue-900 mb-2">Supabase Modu</h4>
+                    <p className="text-blue-800 text-sm">
+                      Sistem Supabase veritabanına bağlı ve tüm veriler gerçek veritabanından geliyor. Tüm değişiklikler
+                      kalıcı olarak saklanıyor.
                     </p>
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+
+                {status.mode === "mock" && (
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-purple-900 mb-2">Mock Data Modu</h4>
+                    <p className="text-purple-800 text-sm">
+                      Sistem mock (sahte) verilerle çalışıyor. Supabase tabloları bulunamadı veya bağlantı kurulamadı.
+                      Değişiklikler geçici olarak bellekte tutuluyor ve sayfa yenilendiğinde kaybolacak.
+                    </p>
+                  </div>
+                )}
+
+                {status.mode === "error" && (
+                  <div className="bg-red-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-red-900 mb-2">Hata Modu</h4>
+                    <p className="text-red-800 text-sm">
+                      Sistemde bir hata oluştu. Lütfen sistem yöneticisi ile iletişime geçin.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Setup Instructions */}
+            {status.mode === "mock" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Supabase Kurulum Talimatları</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-yellow-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-yellow-900 mb-2">Gerçek Veritabanına Geçmek İçin:</h4>
+                    <ol className="list-decimal list-inside space-y-2 text-yellow-800 text-sm">
+                      <li>Supabase Dashboard'a gidin</li>
+                      <li>SQL Editor'ı açın</li>
+                      <li>
+                        <code className="bg-yellow-200 px-1 rounded">001_create_depo_ruzgar_tables.sql</code> dosyasını
+                        çalıştırın
+                      </li>
+                      <li>
+                        <code className="bg-yellow-200 px-1 rounded">002_seed_depo_ruzgar_data.sql</code> dosyasını
+                        çalıştırın
+                      </li>
+                      <li>Bu sayfayı yenileyin</li>
+                    </ol>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
 
-        {/* Kurulum Uyarısı */}
-        {status?.connection && !status.connection.success && (
-          <Card className="border-orange-200 bg-orange-50">
-            <CardHeader>
-              <CardTitle className="text-orange-800 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" />
-                Kurulum Gerekli
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <p className="text-orange-700">
-                  <strong>Depo Rüzgar</strong> tabloları henüz oluşturulmamış. Lütfen aşağıdaki adımları takip edin:
-                </p>
-                <ol className="list-decimal list-inside space-y-2 text-orange-700">
-                  <li>Supabase Dashboard → SQL Editor'e gidin</li>
-                  <li>
-                    <code>001_create_depo_ruzgar_tables.sql</code> script'ini çalıştırın
-                  </li>
-                  <li>
-                    <code>002_seed_depo_ruzgar_data.sql</code> script'ini çalıştırın
-                  </li>
-                  <li>Bu sayfayı yenileyin</li>
-                </ol>
-              </div>
+        {loading && !status && (
+          <Card>
+            <CardContent className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+              <span>Sistem durumu kontrol ediliyor...</span>
             </CardContent>
           </Card>
         )}

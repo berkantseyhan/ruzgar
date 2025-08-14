@@ -14,19 +14,19 @@ export async function GET(request: NextRequest) {
     const shelfId = searchParams.get("shelfId") as ShelfId | null
     const layer = searchParams.get("layer") as Layer | null
 
-    console.log(`🚫 MOCK API: GET request - shelfId: ${shelfId}, layer: ${layer}`)
+    console.log(`🔍 API: GET request - shelfId: ${shelfId}, layer: ${layer}`)
 
     if (shelfId && layer) {
       const products = await getProductsByShelfAndLayer(shelfId, layer)
-      console.log(`🚫 MOCK API: returning ${products.length} products for ${shelfId} - ${layer}`)
+      console.log(`✅ API: returning ${products.length} products for ${shelfId} - ${layer}`)
       return NextResponse.json({ products })
     } else {
       const allProducts = await getAllProducts()
-      console.log(`🚫 MOCK API: returning ${allProducts.length} total products`)
+      console.log(`✅ API: returning ${allProducts.length} total products`)
       return NextResponse.json({ products: allProducts })
     }
   } catch (error) {
-    console.error("🚫 MOCK API: GET error:", error)
+    console.error("❌ API: GET error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch products",
@@ -43,18 +43,26 @@ export async function POST(request: NextRequest) {
     const { product, username, isUpdate } = data
 
     console.log(
-      `🚫 MOCK API: POST request - product: ${product.urunAdi}, shelf: ${product.rafNo}, layer: ${product.katman}, username: ${username}, isUpdate: ${isUpdate}`,
+      `🔍 API: POST request - product: ${product.urunAdi}, shelf: ${product.rafNo}, layer: ${product.katman}, username: ${username}, isUpdate: ${isUpdate}`,
     )
 
-    const success = await saveProduct(product, username, isUpdate)
+    // Validate required fields
+    if (!product || !product.urunAdi || !product.kategori || !product.olcu || !product.rafNo || !product.katman) {
+      console.error("❌ API: Missing required product fields")
+      return NextResponse.json({ error: "Missing required product fields" }, { status: 400 })
+    }
+
+    const success = await saveProduct(product, username || "Bilinmeyen Kullanıcı", isUpdate)
 
     if (success) {
+      console.log("✅ API: Product saved successfully")
       return NextResponse.json({ success: true })
     } else {
+      console.error("❌ API: Failed to save product")
       return NextResponse.json({ error: "Failed to save product" }, { status: 500 })
     }
   } catch (error) {
-    console.error("🚫 MOCK API: POST error:", error)
+    console.error("❌ API: POST error:", error)
     return NextResponse.json(
       {
         error: "Failed to save product",
@@ -70,17 +78,24 @@ export async function DELETE(request: NextRequest) {
     const data = await request.json()
     const { product, username } = data
 
-    console.log(`🚫 MOCK API: DELETE request - product: ${product.id}, username: ${username}`)
+    console.log(`🔍 API: DELETE request - product: ${product.id}, username: ${username}`)
 
-    const success = await deleteProduct(product, username)
+    if (!product || !product.id) {
+      console.error("❌ API: Missing product ID")
+      return NextResponse.json({ error: "Missing product ID" }, { status: 400 })
+    }
+
+    const success = await deleteProduct(product, username || "Bilinmeyen Kullanıcı")
 
     if (success) {
+      console.log("✅ API: Product deleted successfully")
       return NextResponse.json({ success: true })
     } else {
+      console.error("❌ API: Failed to delete product")
       return NextResponse.json({ error: "Failed to delete product" }, { status: 500 })
     }
   } catch (error) {
-    console.error("🚫 MOCK API: DELETE error:", error)
+    console.error("❌ API: DELETE error:", error)
     return NextResponse.json(
       {
         error: "Failed to delete product",

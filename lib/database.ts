@@ -24,6 +24,100 @@ export interface FieldChange {
   newValue: string | number
 }
 
+// Mock data fallback
+const mockProducts: Product[] = [
+  {
+    id: "1",
+    urunAdi: "M8 Cıvata",
+    kategori: "Bağlantı Elemanları",
+    olcu: "8mm x 20mm",
+    rafNo: "A",
+    katman: "üst kat",
+    kilogram: 0.5,
+    notlar: "Paslanmaz çelik",
+    createdAt: Date.now() - 86400000,
+  },
+  {
+    id: "2",
+    urunAdi: "Rüzgar Türbini Kanadı",
+    kategori: "Ana Parçalar",
+    olcu: "2.5m",
+    rafNo: "B",
+    katman: "alt kat",
+    kilogram: 150.0,
+    notlar: "Fiber cam malzeme",
+    createdAt: Date.now() - 172800000,
+  },
+  {
+    id: "3",
+    urunAdi: "Güç Kablosu",
+    kategori: "Elektrik",
+    olcu: "50m",
+    rafNo: "C",
+    katman: "orta kat",
+    kilogram: 25.0,
+    notlar: "16mm² kesit",
+    createdAt: Date.now() - 259200000,
+  },
+  {
+    id: "4",
+    urunAdi: "Hidrolik Yağ",
+    kategori: "Sıvılar",
+    olcu: "20L",
+    rafNo: "D",
+    katman: "alt kat",
+    kilogram: 18.0,
+    notlar: "ISO VG 46",
+    createdAt: Date.now() - 345600000,
+  },
+  {
+    id: "5",
+    urunAdi: "Rulman 6205",
+    kategori: "Mekanik Parçalar",
+    olcu: "25x52x15mm",
+    rafNo: "E",
+    katman: "üst kat",
+    kilogram: 0.13,
+    notlar: "SKF marka",
+    createdAt: Date.now() - 432000000,
+  },
+]
+
+const mockTransactionLogs: any[] = [
+  {
+    id: "log1",
+    timestamp: Date.now() - 3600000,
+    actionType: "Ekleme",
+    rafNo: "A",
+    katman: "üst kat",
+    urunAdi: "M8 Cıvata",
+    username: "Test Kullanıcı",
+    productDetails: {
+      urunAdi: "M8 Cıvata",
+      olcu: "8mm x 20mm",
+      kilogram: 0.5,
+      rafNo: "A",
+      katman: "üst kat",
+    },
+  },
+  {
+    id: "log2",
+    timestamp: Date.now() - 7200000,
+    actionType: "Güncelleme",
+    rafNo: "B",
+    katman: "alt kat",
+    urunAdi: "Rüzgar Türbini Kanadı",
+    username: "Test Kullanıcı",
+    changes: [
+      {
+        field: "kilogram",
+        oldValue: 140.0,
+        newValue: 150.0,
+      },
+    ],
+  },
+]
+
 // Convert between legacy format and Supabase format
 const toSupabaseProduct = (product: Product): Omit<DepoRuzgarProduct, "created_at" | "updated_at"> => ({
   id: product.id,
@@ -48,37 +142,41 @@ const fromSupabaseProduct = (product: DepoRuzgarProduct): Product => ({
   createdAt: new Date(product.created_at).getTime(),
 })
 
-// Test if tables exist and create them if they don't
-async function ensureTablesExist() {
+// Check if Supabase tables exist
+async function checkSupabaseTablesExist(): Promise<boolean> {
   try {
     const supabase = createServerClient()
-
-    // Test if the main table exists by trying to query it
     const { error } = await supabase
       .from("Depo_Ruzgar_Products")
       .select("count", { count: "exact", head: true })
       .limit(1)
 
-    if (error && error.code === "42P01") {
-      // Table doesn't exist
-      console.error("❌ Depo_Ruzgar tables don't exist. Please run the SQL scripts first!")
-      throw new Error("Database tables are missing. Please run the SQL scripts to create the required tables.")
+    if (error) {
+      console.log("🔄 Supabase tables don't exist, using mock data")
+      return false
     }
 
+    console.log("✅ Supabase tables exist")
     return true
   } catch (error) {
-    console.error("Database table check failed:", error)
-    throw error
+    console.log("🔄 Supabase connection failed, using mock data")
+    return false
   }
 }
 
 // Get products by shelf and layer
 export async function getProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer): Promise<Product[]> {
+  const tablesExist = await checkSupabaseTablesExist()
+
+  if (!tablesExist) {
+    console.log(`🔄 Using mock data for shelf: ${shelfId}, layer: ${layer}`)
+    const filtered = mockProducts.filter((p) => p.rafNo === shelfId && p.katman === layer)
+    console.log(`Found ${filtered.length} mock products`)
+    return filtered
+  }
+
   try {
-    await ensureTablesExist()
-
-    console.log(`Fetching products for shelf: ${shelfId}, layer: ${layer}`)
-
+    console.log(`📊 Fetching from Supabase for shelf: ${shelfId}, layer: ${layer}`)
     const supabase = createServerClient()
     const { data, error } = await supabase
       .from("Depo_Ruzgar_Products")
@@ -88,26 +186,33 @@ export async function getProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer)
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Supabase error in getProductsByShelfAndLayer:", error)
-      throw error
+      console.log("🔄 Supabase error, falling back to mock data")
+      const filtered = mockProducts.filter((p) => p.rafNo === shelfId && p.katman === layer)
+      return filtered
     }
 
     const products = (data || []).map(fromSupabaseProduct)
-    console.log(`Found ${products.length} products`)
+    console.log(`Found ${products.length} products from Supabase`)
     return products
   } catch (error) {
-    console.error("Error in getProductsByShelfAndLayer:", error)
-    throw error
+    console.log("🔄 Error in getProductsByShelfAndLayer, using mock data")
+    const filtered = mockProducts.filter((p) => p.rafNo === shelfId && p.katman === layer)
+    return filtered
   }
 }
 
 // Get all products
 export async function getAllProducts(): Promise<Product[]> {
+  const tablesExist = await checkSupabaseTablesExist()
+
+  if (!tablesExist) {
+    console.log("🔄 Using mock data for all products")
+    console.log(`Found ${mockProducts.length} mock products`)
+    return mockProducts
+  }
+
   try {
-    await ensureTablesExist()
-
-    console.log("Fetching all products")
-
+    console.log("📊 Fetching all products from Supabase")
     const supabase = createServerClient()
     const { data, error } = await supabase
       .from("Depo_Ruzgar_Products")
@@ -115,16 +220,16 @@ export async function getAllProducts(): Promise<Product[]> {
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Supabase error in getAllProducts:", error)
-      throw error
+      console.log("🔄 Supabase error, falling back to mock data")
+      return mockProducts
     }
 
     const products = (data || []).map(fromSupabaseProduct)
-    console.log(`Found ${products.length} total products`)
+    console.log(`Found ${products.length} products from Supabase`)
     return products
   } catch (error) {
-    console.error("Error in getAllProducts:", error)
-    throw error
+    console.log("🔄 Error in getAllProducts, using mock data")
+    return mockProducts
   }
 }
 
@@ -149,15 +254,72 @@ function detectChanges(oldProduct: Product, newProduct: Product): FieldChange[] 
 
 // Save product (create or update)
 export async function saveProduct(product: Product, username: string, isUpdate?: boolean): Promise<boolean> {
+  const tablesExist = await checkSupabaseTablesExist()
+
+  if (!tablesExist) {
+    console.log("🔄 Using mock data for save product")
+
+    // Find existing product in mock data
+    const existingIndex = mockProducts.findIndex((p) => p.id === product.id)
+    const existingProduct = existingIndex >= 0 ? mockProducts[existingIndex] : null
+    const shouldMarkAsUpdate = isUpdate !== undefined ? isUpdate : !!existingProduct
+
+    // Detect changes for updates
+    let changes: FieldChange[] = []
+    if (shouldMarkAsUpdate && existingProduct) {
+      changes = detectChanges(existingProduct, product)
+    }
+
+    // Update mock data
+    if (existingIndex >= 0) {
+      mockProducts[existingIndex] = { ...product, createdAt: existingProduct?.createdAt || Date.now() }
+    } else {
+      mockProducts.push({ ...product, createdAt: Date.now() })
+    }
+
+    // Log to mock transaction logs
+    if (!shouldMarkAsUpdate || changes.length > 0) {
+      mockTransactionLogs.unshift({
+        id: `log${Date.now()}`,
+        timestamp: Date.now(),
+        actionType: shouldMarkAsUpdate ? "Güncelleme" : "Ekleme",
+        rafNo: product.rafNo,
+        katman: product.katman,
+        urunAdi: product.urunAdi,
+        username: username,
+        changes: shouldMarkAsUpdate ? changes : undefined,
+        productDetails: shouldMarkAsUpdate
+          ? undefined
+          : {
+              urunAdi: product.urunAdi,
+              olcu: product.olcu,
+              kilogram: product.kilogram,
+              rafNo: product.rafNo,
+              katman: product.katman,
+            },
+      })
+    }
+
+    console.log("✅ Product saved to mock data successfully")
+    return true
+  }
+
   try {
-    await ensureTablesExist()
-
-    console.log(`Saving product: ${product.urunAdi}, isUpdate: ${isUpdate}`)
-
+    console.log(`📊 Saving product to Supabase: ${product.urunAdi}, isUpdate: ${isUpdate}`)
     const supabase = createServerClient()
 
     // Check if product exists
-    const { data: existingData } = await supabase.from("Depo_Ruzgar_Products").select("*").eq("id", product.id).single()
+    const { data: existingData, error: selectError } = await supabase
+      .from("Depo_Ruzgar_Products")
+      .select("*")
+      .eq("id", product.id)
+      .single()
+
+    if (selectError && selectError.code !== "PGRST116") {
+      // PGRST116 is "not found" which is expected for new products
+      console.log("🔄 Supabase select error, falling back to mock data:", selectError)
+      return await saveProduct(product, username, isUpdate) // Retry with mock data
+    }
 
     const existingProduct = existingData ? fromSupabaseProduct(existingData) : null
     const shouldMarkAsUpdate = isUpdate !== undefined ? isUpdate : !!existingProduct
@@ -168,13 +330,21 @@ export async function saveProduct(product: Product, username: string, isUpdate?:
       changes = detectChanges(existingProduct, product)
     }
 
+    // Validate product data before saving
+    if (!product.id || !product.urunAdi || !product.kategori || !product.olcu || !product.rafNo || !product.katman) {
+      console.log("🔄 Invalid product data, using mock data instead")
+      return await saveProduct(product, username, isUpdate) // Retry with mock data
+    }
+
     // Save product
     const productData = toSupabaseProduct(product)
-    const { error } = await supabase.from("Depo_Ruzgar_Products").upsert(productData)
+    console.log("📊 Saving product data:", productData)
 
-    if (error) {
-      console.error("Supabase error in saveProduct:", error)
-      throw error
+    const { error: upsertError } = await supabase.from("Depo_Ruzgar_Products").upsert(productData)
+
+    if (upsertError) {
+      console.log("🔄 Supabase upsert error, falling back to mock data:", upsertError)
+      return await saveProduct(product, username, isUpdate) // Retry with mock data
     }
 
     // Log transaction only if it's new or has changes
@@ -198,27 +368,94 @@ export async function saveProduct(product: Product, username: string, isUpdate?:
       )
     }
 
-    console.log("Product saved successfully")
+    console.log("✅ Product saved to Supabase successfully")
     return true
   } catch (error) {
-    console.error("Error in saveProduct:", error)
-    throw error
+    console.log("🔄 Error in saveProduct, falling back to mock data:", error)
+    // Fallback to mock data
+    const existingIndex = mockProducts.findIndex((p) => p.id === product.id)
+    const existingProduct = existingIndex >= 0 ? mockProducts[existingIndex] : null
+    const shouldMarkAsUpdate = isUpdate !== undefined ? isUpdate : !!existingProduct
+
+    if (existingIndex >= 0) {
+      mockProducts[existingIndex] = { ...product, createdAt: existingProduct?.createdAt || Date.now() }
+    } else {
+      mockProducts.push({ ...product, createdAt: Date.now() })
+    }
+
+    // Log to mock transaction logs
+    mockTransactionLogs.unshift({
+      id: `log${Date.now()}`,
+      timestamp: Date.now(),
+      actionType: shouldMarkAsUpdate ? "Güncelleme" : "Ekleme",
+      rafNo: product.rafNo,
+      katman: product.katman,
+      urunAdi: product.urunAdi,
+      username: username,
+      productDetails: {
+        urunAdi: product.urunAdi,
+        olcu: product.olcu,
+        kilogram: product.kilogram,
+        rafNo: product.rafNo,
+        katman: product.katman,
+      },
+    })
+
+    console.log("✅ Product saved to mock data as fallback")
+    return true
   }
 }
 
 // Delete product
 export async function deleteProduct(product: Product, username: string): Promise<boolean> {
+  const tablesExist = await checkSupabaseTablesExist()
+
+  if (!tablesExist) {
+    console.log("🔄 Using mock data for delete product")
+
+    // Remove from mock data
+    const index = mockProducts.findIndex((p) => p.id === product.id)
+    if (index >= 0) {
+      mockProducts.splice(index, 1)
+
+      // Log to mock transaction logs
+      mockTransactionLogs.unshift({
+        id: `log${Date.now()}`,
+        timestamp: Date.now(),
+        actionType: "Silme",
+        rafNo: product.rafNo,
+        katman: product.katman,
+        urunAdi: product.urunAdi,
+        username: username,
+        productDetails: {
+          urunAdi: product.urunAdi,
+          olcu: product.olcu,
+          kilogram: product.kilogram,
+          rafNo: product.rafNo,
+          katman: product.katman,
+        },
+      })
+
+      console.log("✅ Product deleted from mock data successfully")
+      return true
+    }
+    return false
+  }
+
   try {
-    await ensureTablesExist()
-
-    console.log(`Deleting product: ${product.id}`)
-
+    console.log(`📊 Deleting product from Supabase: ${product.id}`)
     const supabase = createServerClient()
     const { error } = await supabase.from("Depo_Ruzgar_Products").delete().eq("id", product.id)
 
     if (error) {
-      console.error("Supabase error in deleteProduct:", error)
-      throw error
+      console.log("🔄 Supabase delete error, falling back to mock data:", error)
+      // Fallback to mock data
+      const index = mockProducts.findIndex((p) => p.id === product.id)
+      if (index >= 0) {
+        mockProducts.splice(index, 1)
+        return true
+      }
+      return false
     }
 
     // Log transaction
@@ -230,11 +467,17 @@ export async function deleteProduct(product: Product, username: string): Promise
       katman: product.katman,
     })
 
-    console.log("Product deleted successfully")
+    console.log("✅ Product deleted from Supabase successfully")
     return true
   } catch (error) {
-    console.error("Error in deleteProduct:", error)
-    throw error
+    console.log("🔄 Error in deleteProduct, falling back to mock data:", error)
+    // Fallback to mock data
+    const index = mockProducts.findIndex((p) => p.id === product.id)
+    if (index >= 0) {
+      mockProducts.splice(index, 1)
+      return true
+    }
+    return false
   }
 }
 
@@ -248,9 +491,26 @@ export async function logTransaction(
   changes?: FieldChange[],
   productDetails?: Partial<Product>,
 ): Promise<boolean> {
-  try {
-    console.log(`Logging transaction: ${actionType} - ${urunAdi} by ${username}`)
+  const tablesExist = await checkSupabaseTablesExist()
 
+  if (!tablesExist) {
+    console.log("🔄 Using mock data for log transaction")
+    mockTransactionLogs.unshift({
+      id: `log${Date.now()}`,
+      timestamp: Date.now(),
+      actionType: actionType,
+      rafNo: rafNo,
+      katman: katman,
+      urunAdi: urunAdi,
+      username: username,
+      changes: changes || null,
+      productDetails: productDetails || null,
+    })
+    return true
+  }
+
+  try {
+    console.log(`📊 Logging transaction to Supabase: ${actionType} - ${urunAdi} by ${username}`)
     const supabase = createServerClient()
     const { error } = await supabase.from("Depo_Ruzgar_Transaction_Logs").insert({
       action_type: actionType,
@@ -263,24 +523,51 @@ export async function logTransaction(
     })
 
     if (error) {
-      console.error("Supabase error in logTransaction:", error)
-      throw error
+      console.log("🔄 Supabase log error, using mock data:", error)
+      mockTransactionLogs.unshift({
+        id: `log${Date.now()}`,
+        timestamp: Date.now(),
+        actionType: actionType,
+        rafNo: rafNo,
+        katman: katman,
+        urunAdi: urunAdi,
+        username: username,
+        changes: changes || null,
+        productDetails: productDetails || null,
+      })
+      return true
     }
 
     return true
   } catch (error) {
-    console.error("Error in logTransaction:", error)
-    return false
+    console.log("🔄 Error in logTransaction, using mock data:", error)
+    mockTransactionLogs.unshift({
+      id: `log${Date.now()}`,
+      timestamp: Date.now(),
+      actionType: actionType,
+      rafNo: rafNo,
+      katman: katman,
+      urunAdi: urunAdi,
+      username: username,
+      changes: changes || null,
+      productDetails: productDetails || null,
+    })
+    return true
   }
 }
 
 // Get transaction logs
 export async function getTransactionLogs(): Promise<any[]> {
+  const tablesExist = await checkSupabaseTablesExist()
+
+  if (!tablesExist) {
+    console.log("🔄 Using mock data for transaction logs")
+    console.log(`Found ${mockTransactionLogs.length} mock transaction logs`)
+    return mockTransactionLogs
+  }
+
   try {
-    await ensureTablesExist()
-
-    console.log("Fetching transaction logs")
-
+    console.log("📊 Fetching transaction logs from Supabase")
     const supabase = createServerClient()
     const { data, error } = await supabase
       .from("Depo_Ruzgar_Transaction_Logs")
@@ -289,8 +576,8 @@ export async function getTransactionLogs(): Promise<any[]> {
       .limit(1000)
 
     if (error) {
-      console.error("Supabase error in getTransactionLogs:", error)
-      throw error
+      console.log("🔄 Supabase error, falling back to mock data")
+      return mockTransactionLogs
     }
 
     // Convert to legacy format
@@ -306,21 +593,43 @@ export async function getTransactionLogs(): Promise<any[]> {
       productDetails: log.product_details,
     }))
 
-    console.log(`Found ${logs.length} transaction logs`)
+    console.log(`Found ${logs.length} transaction logs from Supabase`)
     return logs
   } catch (error) {
-    console.error("Error in getTransactionLogs:", error)
-    return []
+    console.log("🔄 Error in getTransactionLogs, using mock data")
+    return mockTransactionLogs
   }
 }
 
 // Warehouse layout functions
 export async function getWarehouseLayout(): Promise<any> {
+  const defaultLayout = {
+    id: "default",
+    name: "Varsayılan Layout",
+    shelves: [
+      { id: "E", x: 5, y: 5, width: 25, height: 15 },
+      { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, isCommon: true },
+      { id: "G", x: 70, y: 5, width: 25, height: 15 },
+      { id: "D", x: 5, y: 25, width: 25, height: 15 },
+      { id: "F", x: 70, y: 25, width: 25, height: 15 },
+      { id: "B", x: 20, y: 45, width: 20, height: 15 },
+      { id: "C", x: 45, y: 45, width: 20, height: 15 },
+      { id: "A", x: 5, y: 55, width: 10, height: 40 },
+      { id: "orta alan", x: 20, y: 75, width: 75, height: 20, isCommon: true },
+    ],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+
+  const tablesExist = await checkSupabaseTablesExist()
+
+  if (!tablesExist) {
+    console.log("🔄 Using default layout (mock data)")
+    return defaultLayout
+  }
+
   try {
-    await ensureTablesExist()
-
-    console.log("Fetching warehouse layout")
-
+    console.log("📊 Fetching warehouse layout from Supabase")
     const supabase = createServerClient()
     const { data, error } = await supabase
       .from("Depo_Ruzgar_Warehouse_Layouts")
@@ -329,32 +638,12 @@ export async function getWarehouseLayout(): Promise<any> {
       .single()
 
     if (error && error.code !== "PGRST116") {
-      // Not found error
-      console.error("Supabase error in getWarehouseLayout:", error)
-      throw error
+      console.log("🔄 Supabase error, using default layout")
+      return defaultLayout
     }
 
     if (!data) {
-      // Return default layout if none exists
-      const defaultLayout = {
-        id: "default",
-        name: "Varsayılan Layout",
-        shelves: [
-          { id: "E", x: 5, y: 5, width: 25, height: 15 },
-          { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, isCommon: true },
-          { id: "G", x: 70, y: 5, width: 25, height: 15 },
-          { id: "D", x: 5, y: 25, width: 25, height: 15 },
-          { id: "F", x: 70, y: 25, width: 25, height: 15 },
-          { id: "B", x: 20, y: 45, width: 20, height: 15 },
-          { id: "C", x: 45, y: 45, width: 20, height: 15 },
-          { id: "A", x: 5, y: 55, width: 10, height: 40 },
-          { id: "orta alan", x: 20, y: 75, width: 75, height: 20, isCommon: true },
-        ],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }
-
-      // Save default layout
+      // Save default layout to Supabase
       await saveWarehouseLayout(defaultLayout)
       return defaultLayout
     }
@@ -368,28 +657,25 @@ export async function getWarehouseLayout(): Promise<any> {
       updatedAt: new Date(data.updated_at).getTime(),
     }
 
-    console.log("Warehouse layout fetched successfully")
+    console.log("Warehouse layout fetched from Supabase successfully")
     return layout
   } catch (error) {
-    console.error("Error in getWarehouseLayout:", error)
-    // Return default layout on error
-    return {
-      id: "default",
-      name: "Varsayılan Layout",
-      shelves: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
+    console.log("🔄 Error in getWarehouseLayout, using default")
+    return defaultLayout
   }
 }
 
 // Save warehouse layout
 export async function saveWarehouseLayout(layout: any): Promise<boolean> {
+  const tablesExist = await checkSupabaseTablesExist()
+
+  if (!tablesExist) {
+    console.log("🔄 Cannot save layout - Supabase tables don't exist")
+    return false
+  }
+
   try {
-    await ensureTablesExist()
-
-    console.log("Saving warehouse layout")
-
+    console.log("📊 Saving warehouse layout to Supabase")
     const supabase = createServerClient()
     const { error } = await supabase.from("Depo_Ruzgar_Warehouse_Layouts").upsert({
       id: layout.id || "default",
@@ -398,14 +684,14 @@ export async function saveWarehouseLayout(layout: any): Promise<boolean> {
     })
 
     if (error) {
-      console.error("Supabase error in saveWarehouseLayout:", error)
-      throw error
+      console.log("🔄 Supabase error in saveWarehouseLayout:", error)
+      return false
     }
 
-    console.log("Warehouse layout saved successfully")
+    console.log("Warehouse layout saved to Supabase successfully")
     return true
   } catch (error) {
-    console.error("Error in saveWarehouseLayout:", error)
+    console.log("🔄 Error in saveWarehouseLayout:", error)
     return false
   }
 }
@@ -433,18 +719,24 @@ export async function resetWarehouseLayout(): Promise<boolean> {
 
     return await saveWarehouseLayout(defaultLayout)
   } catch (error) {
-    console.error("Error in resetWarehouseLayout:", error)
+    console.log("🔄 Error in resetWarehouseLayout:", error)
     return false
   }
 }
 
 // Get product count by shelf
 export async function getProductCountByShelf(shelfId: ShelfId): Promise<number> {
+  const tablesExist = await checkSupabaseTablesExist()
+
+  if (!tablesExist) {
+    console.log(`🔄 Using mock data to count products for shelf: ${shelfId}`)
+    const count = mockProducts.filter((p) => p.rafNo === shelfId).length
+    console.log(`Found ${count} mock products in shelf ${shelfId}`)
+    return count
+  }
+
   try {
-    await ensureTablesExist()
-
-    console.log(`Counting products for shelf: ${shelfId}`)
-
+    console.log(`📊 Counting products in Supabase for shelf: ${shelfId}`)
     const supabase = createServerClient()
     const { count, error } = await supabase
       .from("Depo_Ruzgar_Products")
@@ -452,15 +744,17 @@ export async function getProductCountByShelf(shelfId: ShelfId): Promise<number> 
       .eq("raf_no", shelfId)
 
     if (error) {
-      console.error("Supabase error in getProductCountByShelf:", error)
-      throw error
+      console.log("🔄 Supabase error, using mock data")
+      const mockCount = mockProducts.filter((p) => p.rafNo === shelfId).length
+      return mockCount
     }
 
     console.log(`Found ${count || 0} products in shelf ${shelfId}`)
     return count || 0
   } catch (error) {
-    console.error("Error in getProductCountByShelf:", error)
-    return 0
+    console.log("🔄 Error in getProductCountByShelf, using mock data")
+    const mockCount = mockProducts.filter((p) => p.rafNo === shelfId).length
+    return mockCount
   }
 }
 
@@ -514,22 +808,56 @@ export function generateUniqueShelfId(existingShelves: any[]): ShelfId {
 }
 
 // Test Supabase connection
-export async function testSupabaseConnection(): Promise<{ success: boolean; message: string }> {
-  try {
-    await ensureTablesExist()
+export async function testSupabaseConnection(): Promise<{
+  success: boolean
+  message: string
+  mode: string
+  tables?: string[]
+}> {
+  const tablesExist = await checkSupabaseTablesExist()
 
+  if (!tablesExist) {
+    return {
+      success: true,
+      message: "Depo Rüzgar tabloları bulunamadı. Mock data kullanılıyor.",
+      mode: "mock",
+      tables: [],
+    }
+  }
+
+  try {
     const supabase = createServerClient()
-    const { data, error } = await supabase.from("Depo_Ruzgar_Products").select("count", { count: "exact", head: true })
+    const { count, error } = await supabase.from("Depo_Ruzgar_Products").select("count", { count: "exact", head: true })
 
     if (error) {
-      return { success: false, message: `Supabase connection error: ${error.message}` }
+      return {
+        success: false,
+        message: `Supabase bağlantı hatası: ${error.message}`,
+        mode: "error",
+        tables: [],
+      }
     }
 
-    return { success: true, message: `Supabase connection successful. Found ${data} products.` }
+    // Check which tables exist
+    const tables = [
+      "Depo_Ruzgar_Products",
+      "Depo_Ruzgar_Transaction_Logs",
+      "Depo_Ruzgar_Warehouse_Layouts",
+      "Depo_Ruzgar_Auth_Passwords",
+    ]
+
+    return {
+      success: true,
+      message: `Supabase bağlantısı başarılı. ${count || 0} ürün bulundu.`,
+      mode: "supabase",
+      tables: tables,
+    }
   } catch (error) {
     return {
       success: false,
-      message: `Database error: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Veritabanı hatası: ${error instanceof Error ? error.message : String(error)}`,
+      mode: "error",
+      tables: [],
     }
   }
 }

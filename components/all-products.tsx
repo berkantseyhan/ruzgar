@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Search, Download, ArrowUpDown, Loader2, Filter, Database, Package } from "lucide-react"
-import type { Product } from "@/lib/redis"
+import type { Product } from "@/lib/database"
 import { useToast } from "@/components/ui/use-toast"
 import { convertHeadersForCSV } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -29,14 +29,16 @@ export default function AllProductsComponent() {
     setLoading(true)
     setError(null)
     try {
+      console.log("🔄 Fetching products...")
       const response = await fetch("/api/products")
       if (!response.ok) {
         throw new Error(`Server responded with status: ${response.status}`)
       }
       const data = await response.json()
+      console.log("✅ Products fetched successfully:", data.products?.length || 0)
       setProducts(data.products || [])
     } catch (err) {
-      console.error("Error fetching products:", err)
+      console.error("❌ Error fetching products:", err)
       setError(err instanceof Error ? err.message : "Ürünler yüklenirken bir hata oluştu")
       toast({
         title: "Hata",
@@ -212,7 +214,7 @@ export default function AllProductsComponent() {
               size="icon"
               onClick={fetchProducts}
               disabled={loading}
-              className="shadow-sm hover:shadow-md transition-all"
+              className="shadow-sm hover:shadow-md transition-all bg-transparent"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               <span className="sr-only">Yenile</span>
@@ -222,7 +224,7 @@ export default function AllProductsComponent() {
               size="icon"
               onClick={handleExportCSV}
               disabled={filteredAndSortedProducts.length === 0}
-              className="shadow-sm hover:shadow-md transition-all"
+              className="shadow-sm hover:shadow-md transition-all bg-transparent"
             >
               <Download className="h-4 w-4" />
               <span className="sr-only">CSV İndir</span>
@@ -239,7 +241,7 @@ export default function AllProductsComponent() {
         ) : error ? (
           <div className="text-center py-8 text-destructive bg-destructive/10 m-6 rounded-lg border border-destructive/20">
             <p className="font-medium">{error}</p>
-            <Button onClick={fetchProducts} className="mt-4" variant="outline">
+            <Button onClick={fetchProducts} className="mt-4 bg-transparent" variant="outline">
               Tekrar Dene
             </Button>
           </div>

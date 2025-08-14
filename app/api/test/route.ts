@@ -3,37 +3,47 @@ import { testSupabaseConnection } from "@/lib/database"
 
 export async function GET() {
   try {
-    console.log("Testing Supabase connection...")
+    console.log("🔍 Testing system status...")
 
-    const result = await testSupabaseConnection()
+    const connectionTest = await testSupabaseConnection()
 
-    return NextResponse.json({
-      status: result.success ? "success" : "error",
-      message: "Depo Ruzgar System - Supabase Connected",
-      connection: result,
-      mode: "SUPABASE_PRODUCTION",
-      database: "Supabase PostgreSQL",
-      tables: [
-        "Depo_Ruzgar_Products",
-        "Depo_Ruzgar_Transaction_Logs",
-        "Depo_Ruzgar_Warehouse_Layouts",
-        "Depo_Ruzgar_Auth_Passwords",
-      ],
+    const response = {
       timestamp: new Date().toISOString(),
-      environment: {
-        node_env: process.env.NODE_ENV,
-        vercel_env: process.env.VERCEL_ENV,
+      status: connectionTest.success ? "healthy" : "degraded",
+      mode: connectionTest.mode,
+      database: {
+        connected: connectionTest.success,
+        message: connectionTest.message,
+        tables: connectionTest.tables || [],
       },
-    })
+      environment: {
+        nodeEnv: process.env.NODE_ENV,
+        hasSupabaseUrl: !!process.env.SUPABASE_URL,
+        hasSupabaseKey: !!process.env.SUPABASE_ANON_KEY,
+      },
+    }
+
+    console.log("✅ System status check completed:", response.status)
+
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("Test error:", error)
+    console.error("❌ System status check failed:", error)
+
     return NextResponse.json(
       {
-        status: "error",
-        message: "Supabase connection test failed",
-        error: error instanceof Error ? error.message : String(error),
-        mode: "SUPABASE_PRODUCTION",
         timestamp: new Date().toISOString(),
+        status: "error",
+        mode: "error",
+        database: {
+          connected: false,
+          message: `System error: ${error instanceof Error ? error.message : String(error)}`,
+          tables: [],
+        },
+        environment: {
+          nodeEnv: process.env.NODE_ENV,
+          hasSupabaseUrl: !!process.env.SUPABASE_URL,
+          hasSupabaseKey: !!process.env.SUPABASE_ANON_KEY,
+        },
       },
       { status: 500 },
     )
