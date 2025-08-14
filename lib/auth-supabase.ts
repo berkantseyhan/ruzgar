@@ -5,7 +5,11 @@ import bcrypt from "bcryptjs"
 export async function getStoredPassword(): Promise<string | null> {
   try {
     const supabase = createServerClient()
-    const { data, error } = await supabase.from("auth_passwords").select("password_hash").eq("id", "main").single()
+    const { data, error } = await supabase
+      .from("Depo_Ruzgar_Auth_Passwords")
+      .select("password_hash")
+      .eq("id", "main")
+      .single()
 
     if (error && error.code !== "PGRST116") {
       // Not found error
@@ -26,7 +30,7 @@ export async function setStoredPassword(password: string): Promise<boolean> {
     const supabase = createServerClient()
     const passwordHash = await bcrypt.hash(password, 10)
 
-    const { error } = await supabase.from("auth_passwords").upsert({
+    const { error } = await supabase.from("Depo_Ruzgar_Auth_Passwords").upsert({
       id: "main",
       password_hash: passwordHash,
     })

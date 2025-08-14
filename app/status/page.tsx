@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, RefreshCw, Database, Wifi, WifiOff } from "lucide-react"
+import { CheckCircle, XCircle, RefreshCw, Database, Wifi, AlertTriangle } from "lucide-react"
 
 interface SystemStatus {
   status: string
@@ -15,6 +15,7 @@ interface SystemStatus {
   }
   mode: string
   timestamp: string
+  tables?: string[]
 }
 
 export default function StatusPage() {
@@ -52,7 +53,7 @@ export default function StatusPage() {
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Sistem Durumu</h1>
-        <p className="text-muted-foreground">Depo yönetim sisteminin mevcut durumu ve bağlantı bilgileri</p>
+        <p className="text-muted-foreground">Depo Rüzgar yönetim sisteminin mevcut durumu ve bağlantı bilgileri</p>
       </div>
 
       <div className="grid gap-6">
@@ -108,18 +109,49 @@ export default function StatusPage() {
           <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-lg font-medium">Mock Data Modu</p>
-                <p className="text-sm text-muted-foreground">
-                  Sistem şu anda bellekte saklanan test verileri ile çalışıyor
-                </p>
+                <p className="text-lg font-medium">Supabase PostgreSQL</p>
+                <p className="text-sm text-muted-foreground">Sistem Supabase veritabanı ile çalışıyor</p>
               </div>
-              <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-                <WifiOff className="h-3 w-3 mr-1" />
-                OFFLINE
+              <Badge variant="default" className="bg-green-100 text-green-800">
+                <Wifi className="h-3 w-3 mr-1" />
+                ONLINE
               </Badge>
             </div>
           </CardContent>
         </Card>
+
+        {/* Veritabanı Tabloları */}
+        {status?.tables && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Depo Rüzgar Tabloları
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {status.tables.map((table) => (
+                  <div key={table} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <p className="font-medium">{table}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {table.includes("Products") && "Ürün verileri"}
+                        {table.includes("Transaction_Logs") && "İşlem kayıtları"}
+                        {table.includes("Warehouse_Layouts") && "Depo düzeni"}
+                        {table.includes("Auth_Passwords") && "Kimlik doğrulama"}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Aktif
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Bağlantı Durumu */}
         <Card>
@@ -133,23 +165,28 @@ export default function StatusPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 border rounded-lg">
                 <div>
-                  <p className="font-medium">Redis</p>
-                  <p className="text-sm text-muted-foreground">Upstash Redis bağlantısı</p>
+                  <p className="font-medium">Supabase PostgreSQL</p>
+                  <p className="text-sm text-muted-foreground">Ana veritabanı bağlantısı</p>
                 </div>
-                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                  <XCircle className="h-3 w-3 mr-1" />
-                  Devre Dışı
-                </Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">Mock Data</p>
-                  <p className="text-sm text-muted-foreground">Bellekte saklanan test verileri</p>
-                </div>
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Aktif
+                <Badge
+                  variant="outline"
+                  className={
+                    status?.connection?.success
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-red-50 text-red-700 border-red-200"
+                  }
+                >
+                  {status?.connection?.success ? (
+                    <>
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Bağlı
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-3 w-3 mr-1" />
+                      Hata
+                    </>
+                  )}
                 </Badge>
               </div>
             </div>
@@ -164,9 +201,19 @@ export default function StatusPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm font-medium text-blue-800">Sistem Mesajı:</p>
-                  <p className="text-sm text-blue-700">{status.message}</p>
+                <div
+                  className={`p-3 border rounded-lg ${
+                    status.status === "success" ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                  }`}
+                >
+                  <p
+                    className={`text-sm font-medium ${status.status === "success" ? "text-green-800" : "text-red-800"}`}
+                  >
+                    Sistem Mesajı:
+                  </p>
+                  <p className={`text-sm ${status.status === "success" ? "text-green-700" : "text-red-700"}`}>
+                    {status.message}
+                  </p>
                 </div>
 
                 {status.connection && (
@@ -190,18 +237,34 @@ export default function StatusPage() {
           </Card>
         )}
 
-        {/* Uyarı Mesajı */}
-        <Card className="border-orange-200 bg-orange-50">
-          <CardHeader>
-            <CardTitle className="text-orange-800">⚠️ Önemli Bilgi</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-orange-700">
-              Sistem şu anda <strong>Mock Data Modu</strong>'nda çalışıyor. Tüm veriler bellekte saklanıyor ve sayfa
-              yenilendiğinde kaybolacak. Kalıcı veri saklama için Supabase veritabanı kurulumu gerekiyor.
-            </p>
-          </CardContent>
-        </Card>
+        {/* Kurulum Uyarısı */}
+        {status?.connection && !status.connection.success && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardHeader>
+              <CardTitle className="text-orange-800 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                Kurulum Gerekli
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <p className="text-orange-700">
+                  <strong>Depo Rüzgar</strong> tabloları henüz oluşturulmamış. Lütfen aşağıdaki adımları takip edin:
+                </p>
+                <ol className="list-decimal list-inside space-y-2 text-orange-700">
+                  <li>Supabase Dashboard → SQL Editor'e gidin</li>
+                  <li>
+                    <code>001_create_depo_ruzgar_tables.sql</code> script'ini çalıştırın
+                  </li>
+                  <li>
+                    <code>002_seed_depo_ruzgar_data.sql</code> script'ini çalıştırın
+                  </li>
+                  <li>Bu sayfayı yenileyin</li>
+                </ol>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

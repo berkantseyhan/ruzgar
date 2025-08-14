@@ -1,15 +1,24 @@
 import { NextResponse } from "next/server"
+import { testSupabaseConnection } from "@/lib/database"
 
 export async function GET() {
   try {
-    console.log("🚫 Testing mock data system...")
+    console.log("Testing Supabase connection...")
+
+    const result = await testSupabaseConnection()
 
     return NextResponse.json({
-      status: "success",
-      message: "Mock Data System Active",
-      mode: "MOCK_DATA_ONLY",
-      database: "In-Memory Storage",
-      redis: "Disabled",
+      status: result.success ? "success" : "error",
+      message: "Depo Ruzgar System - Supabase Connected",
+      connection: result,
+      mode: "SUPABASE_PRODUCTION",
+      database: "Supabase PostgreSQL",
+      tables: [
+        "Depo_Ruzgar_Products",
+        "Depo_Ruzgar_Transaction_Logs",
+        "Depo_Ruzgar_Warehouse_Layouts",
+        "Depo_Ruzgar_Auth_Passwords",
+      ],
       timestamp: new Date().toISOString(),
       environment: {
         node_env: process.env.NODE_ENV,
@@ -17,13 +26,13 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error("❌ Test error:", error)
+    console.error("Test error:", error)
     return NextResponse.json(
       {
         status: "error",
-        message: "Test failed",
+        message: "Supabase connection test failed",
         error: error instanceof Error ? error.message : String(error),
-        mode: "MOCK_DATA_ONLY",
+        mode: "SUPABASE_PRODUCTION",
         timestamp: new Date().toISOString(),
       },
       { status: 500 },

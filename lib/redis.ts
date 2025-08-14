@@ -1,4 +1,3 @@
-// Mock-only implementation - Redis completely removed
 import {
   getMockProductsByShelfAndLayer,
   getAllMockProducts,
@@ -9,8 +8,9 @@ import {
   getMockTransactionLogs,
 } from "./mock-data"
 
-export type ShelfId = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L"
-export type Layer = "üst kat" | "orta kat" | "alt kat"
+export type ShelfId = string
+export type Layer = string
+export type ActionType = "Ekleme" | "Güncelleme" | "Silme"
 
 export interface Product {
   id: string
@@ -20,119 +20,294 @@ export interface Product {
   rafNo: ShelfId
   katman: Layer
   kilogram: number
-  notlar?: string
+  notlar: string
   createdAt: number
+}
+
+export interface FieldChange {
+  field: string
+  oldValue: string | number
+  newValue: string | number
 }
 
 export interface TransactionLog {
   id: string
-  action: "CREATE" | "UPDATE" | "DELETE"
-  productId: string
-  productName: string
-  shelf: string
-  layer: string
   timestamp: number
+  actionType: ActionType
+  rafNo: ShelfId
+  katman: Layer
+  urunAdi: string
   username: string
-  details: string
-  changes: Record<string, { old: string; new: string }>
+  changes?: FieldChange[]
+  productDetails?: Partial<Product>
+}
+
+export interface ShelfLayout {
+  id: ShelfId
+  x: number
+  y: number
+  width: number
+  height: number
+  isCommon?: boolean
+  customLayers?: string[]
 }
 
 export interface WarehouseLayout {
-  shelves: ShelfId[]
-  layers: Record<ShelfId, Layer[]>
+  id: string
+  name: string
+  shelves: ShelfLayout[]
+  createdAt: number
+  updatedAt: number
 }
 
 // Mock warehouse layout
-const mockWarehouseLayout: WarehouseLayout = {
-  shelves: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"],
-  layers: {
-    A: ["üst kat", "orta kat", "alt kat"],
-    B: ["üst kat", "orta kat", "alt kat"],
-    C: ["üst kat", "orta kat", "alt kat"],
-    D: ["üst kat", "orta kat", "alt kat"],
-    E: ["üst kat", "orta kat", "alt kat"],
-    F: ["üst kat", "orta kat", "alt kat"],
-    G: ["üst kat", "orta kat", "alt kat"],
-    H: ["üst kat", "orta kat", "alt kat"],
-    I: ["üst kat", "orta kat", "alt kat"],
-    J: ["üst kat", "orta kat", "alt kat"],
-    K: ["üst kat", "orta kat", "alt kat"],
-    L: ["üst kat", "orta kat", "alt kat"],
-  },
+let mockLayoutData: WarehouseLayout = {
+  id: "default",
+  name: "Varsayılan Layout",
+  shelves: [
+    { id: "E", x: 5, y: 5, width: 25, height: 15 },
+    { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, isCommon: true },
+    { id: "G", x: 70, y: 5, width: 25, height: 15 },
+    { id: "D", x: 5, y: 25, width: 25, height: 15 },
+    { id: "F", x: 70, y: 25, width: 25, height: 15 },
+    { id: "B", x: 20, y: 45, width: 20, height: 15 },
+    { id: "C", x: 45, y: 45, width: 20, height: 15 },
+    { id: "A", x: 5, y: 55, width: 10, height: 40 },
+    { id: "orta alan", x: 20, y: 75, width: 75, height: 20, isCommon: true },
+  ],
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
 }
 
-// Mock user data
-const mockUsers = new Map<string, { username: string; hashedPassword: string }>()
+console.log("🚫 MOCK DATA MODE: All Redis functionality disabled")
 
 // Product functions
 export async function getProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer): Promise<Product[]> {
-  console.log("🚫 MOCK: Getting products for", shelfId, layer)
+  console.log(`🚫 MOCK: Fetching products for shelf: ${shelfId}, layer: ${layer}`)
   return getMockProductsByShelfAndLayer(shelfId, layer)
 }
 
 export async function getAllProducts(): Promise<Product[]> {
-  console.log("🚫 MOCK: Getting all products")
+  console.log("🚫 MOCK: Fetching all products")
   return getAllMockProducts()
 }
 
-export async function saveProduct(product: Product): Promise<boolean> {
-  console.log("🚫 MOCK: Saving product", product.urunAdi)
-  return saveMockProduct(product)
+function detectChanges(oldProduct: Product, newProduct: Product): FieldChange[] {
+  const changes: FieldChange[] = []
+  const fields: (keyof Product)[] = ["urunAdi", "kategori", "olcu", "rafNo", "katman", "kilogram", "notlar"]
+
+  for (const field of fields) {
+    if (oldProduct[field] !== newProduct[field]) {
+      changes.push({
+        field: field,
+        oldValue: oldProduct[field] as string | number,
+        newValue: newProduct[field] as string | number,
+      })
+    }
+  }
+
+  return changes
 }
 
-export async function deleteProduct(product: Product): Promise<boolean> {
-  console.log("🚫 MOCK: Deleting product", product.urunAdi)
-  return deleteMockProduct(product)
+export async function saveProduct(product: Product, username: string, isUpdate?: boolean): Promise<boolean> {
+  console.log(`🚫 MOCK: Saving product: ${product.urunAdi}, isUpdate: ${isUpdate}`)
+
+  try {
+    const existingProduct = getMockProductById(product.id)
+    const shouldMarkAsUpdate = isUpdate !== undefined ? isUpdate : !!existingProduct
+
+    let changes: FieldChange[] = []
+    if (shouldMarkAsUpdate && existingProduct) {
+      changes = detectChanges(existingProduct, product)
+    }
+
+    const result = saveMockProduct(product)
+
+    if (!shouldMarkAsUpdate || changes.length > 0) {
+      await logTransaction(
+        shouldMarkAsUpdate ? "Güncelleme" : "Ekleme",
+        product.rafNo,
+        product.katman,
+        product.urunAdi,
+        username,
+        shouldMarkAsUpdate ? changes : undefined,
+        shouldMarkAsUpdate
+          ? undefined
+          : {
+              urunAdi: product.urunAdi,
+              olcu: product.olcu,
+              kilogram: product.kilogram,
+              rafNo: product.rafNo,
+              katman: product.katman,
+            },
+      )
+    }
+
+    return result
+  } catch (error) {
+    console.error("🚫 MOCK: Error in saveProduct:", error)
+    return false
+  }
 }
 
-export async function getProductById(id: string): Promise<Product | null> {
-  console.log("🚫 MOCK: Getting product by ID", id)
-  return getMockProductById(id) || null
+export async function deleteProduct(product: Product, username: string): Promise<boolean> {
+  console.log(`🚫 MOCK: Deleting product: ${product.id}`)
+
+  try {
+    const result = deleteMockProduct(product)
+
+    if (result) {
+      await logTransaction("Silme", product.rafNo, product.katman, product.urunAdi, username, undefined, {
+        urunAdi: product.urunAdi,
+        olcu: product.olcu,
+        kilogram: product.kilogram,
+        rafNo: product.rafNo,
+        katman: product.katman,
+      })
+    }
+
+    return result
+  } catch (error) {
+    console.error("🚫 MOCK: Error in deleteProduct:", error)
+    return false
+  }
+}
+
+export async function logTransaction(
+  actionType: ActionType,
+  rafNo: ShelfId,
+  katman: Layer,
+  urunAdi: string,
+  username = "Bilinmeyen Kullanıcı",
+  changes?: FieldChange[],
+  productDetails?: Partial<Product>,
+): Promise<boolean> {
+  console.log(`🚫 MOCK: Logging transaction: ${actionType} - ${urunAdi} by ${username}`)
+
+  try {
+    addMockTransactionLog({
+      timestamp: Date.now(),
+      actionType,
+      rafNo,
+      katman,
+      urunAdi,
+      username,
+      changes: changes || undefined,
+      productDetails: productDetails || undefined,
+    })
+
+    return true
+  } catch (error) {
+    console.error("🚫 MOCK: Error in logTransaction:", error)
+    return false
+  }
+}
+
+export async function getTransactionLogs(): Promise<TransactionLog[]> {
+  console.log("🚫 MOCK: Fetching transaction logs")
+  return getMockTransactionLogs()
 }
 
 // Layout functions
 export async function getWarehouseLayout(): Promise<WarehouseLayout> {
-  console.log("🚫 MOCK: Getting warehouse layout")
-  return mockWarehouseLayout
+  console.log("🚫 MOCK: Fetching warehouse layout")
+  return { ...mockLayoutData }
 }
 
-export async function updateWarehouseLayout(layout: WarehouseLayout): Promise<boolean> {
-  console.log("🚫 MOCK: Updating warehouse layout")
-  // In mock mode, we don't actually save the layout
-  return true
+export async function saveWarehouseLayout(layout: WarehouseLayout): Promise<boolean> {
+  console.log("🚫 MOCK: Saving warehouse layout")
+
+  try {
+    mockLayoutData = {
+      ...layout,
+      updatedAt: Date.now(),
+    }
+    return true
+  } catch (error) {
+    console.error("🚫 MOCK: Error in saveWarehouseLayout:", error)
+    return false
+  }
 }
 
-export async function getAvailableLayersForShelf(shelfId: ShelfId): Promise<Layer[]> {
-  console.log("🚫 MOCK: Getting available layers for shelf", shelfId)
-  return mockWarehouseLayout.layers[shelfId] || ["üst kat", "orta kat", "alt kat"]
+export async function resetWarehouseLayout(): Promise<boolean> {
+  console.log("🚫 MOCK: Resetting warehouse layout")
+
+  try {
+    mockLayoutData = {
+      id: "default",
+      name: "Varsayılan Layout",
+      shelves: [
+        { id: "E", x: 5, y: 5, width: 25, height: 15 },
+        { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, isCommon: true },
+        { id: "G", x: 70, y: 5, width: 25, height: 15 },
+        { id: "D", x: 5, y: 25, width: 25, height: 15 },
+        { id: "F", x: 70, y: 25, width: 25, height: 15 },
+        { id: "B", x: 20, y: 45, width: 20, height: 15 },
+        { id: "C", x: 45, y: 45, width: 20, height: 15 },
+        { id: "A", x: 5, y: 55, width: 10, height: 40 },
+        { id: "orta alan", x: 20, y: 75, width: 75, height: 20, isCommon: true },
+      ],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    return true
+  } catch (error) {
+    console.error("🚫 MOCK: Error in resetWarehouseLayout:", error)
+    return false
+  }
 }
 
-// Transaction log functions
-export async function addTransactionLog(log: Omit<TransactionLog, "id">): Promise<void> {
-  console.log("🚫 MOCK: Adding transaction log", log.action, log.productName)
-  addMockTransactionLog(log)
+export async function getProductCountByShelf(shelfId: ShelfId): Promise<number> {
+  console.log(`🚫 MOCK: Counting products for shelf: ${shelfId}`)
+  const allProducts = getAllMockProducts()
+  const count = allProducts.filter((product) => product.rafNo === shelfId).length
+  return count
 }
 
-export async function getTransactionLogs(): Promise<TransactionLog[]> {
-  console.log("🚫 MOCK: Getting transaction logs")
-  return getMockTransactionLogs()
+export function getAvailableLayersForShelf(shelfId: ShelfId, layout?: WarehouseLayout): string[] {
+  console.log(`🚫 MOCK: Getting available layers for shelf: ${shelfId}`)
+
+  if (layout) {
+    const shelf = layout.shelves.find((s) => s.id === shelfId)
+    if (shelf?.customLayers && shelf.customLayers.length > 0) {
+      return shelf.customLayers
+    }
+  }
+
+  // Default layers based on shelf type
+  if (shelfId === "çıkış yolu") {
+    return ["dayının alanı", "cam kenarı", "tuvalet önü", "merdiven tarafı"]
+  } else if (shelfId === "orta alan") {
+    return ["a önü", "b önü", "c önü", "mutfak yanı", "tezgah yanı"]
+  } else {
+    return ["üst kat", "orta kat", "alt kat"]
+  }
 }
 
-// Auth functions
-export async function createUser(username: string, hashedPassword: string): Promise<boolean> {
-  console.log("🚫 MOCK: Creating user", username)
-  mockUsers.set(username, { username, hashedPassword })
-  return true
+export function generateUniqueShelfId(existingShelves: ShelfLayout[]): ShelfId {
+  const existingIds = existingShelves.map((shelf) => shelf.id)
+
+  // Try letters first
+  for (let i = 65; i <= 90; i++) {
+    const letter = String.fromCharCode(i)
+    if (!existingIds.includes(letter)) {
+      return letter
+    }
+  }
+
+  // If all letters are used, try numbers
+  for (let i = 1; i <= 99; i++) {
+    const numberId = `${i}`
+    if (!existingIds.includes(numberId)) {
+      return numberId
+    }
+  }
+
+  // Fallback
+  return `Raf${Date.now()}`
 }
 
-export async function getUserByUsername(
-  username: string,
-): Promise<{ username: string; hashedPassword: string } | null> {
-  console.log("🚫 MOCK: Getting user", username)
-  return mockUsers.get(username) || null
-}
-
-export async function testConnection(): Promise<boolean> {
-  console.log("🚫 MOCK: Testing connection - always returns true")
-  return true
+export async function testRedisConnection(): Promise<{ success: boolean; message: string }> {
+  console.log("🚫 MOCK: Testing connection (mock mode)")
+  return { success: true, message: "Mock Data Modu Aktif - Redis Devre Dışı" }
 }

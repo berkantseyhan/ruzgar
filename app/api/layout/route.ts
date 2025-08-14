@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getWarehouseLayout, saveWarehouseLayout, resetWarehouseLayout, type WarehouseLayout } from "@/lib/database"
+import { getWarehouseLayout, saveWarehouseLayout, resetWarehouseLayout, getProductCountByShelf } from "@/lib/redis"
 
 export async function GET() {
   try {
@@ -23,18 +23,15 @@ export async function POST(request: NextRequest) {
     const { layout } = data
 
     console.log("Received layout save request")
-    console.log("Layout data:", JSON.stringify(layout, null, 2))
 
     if (!layout) {
       return NextResponse.json({ error: "Layout data is required" }, { status: 400 })
     }
 
-    // Validate layout structure
     if (!layout.shelves || !Array.isArray(layout.shelves)) {
       return NextResponse.json({ error: "Invalid layout structure" }, { status: 400 })
     }
 
-    // Ensure each shelf has required properties and preserve custom layers
     const validatedLayout = {
       ...layout,
       shelves: layout.shelves.map((shelf: any) => ({
@@ -44,20 +41,18 @@ export async function POST(request: NextRequest) {
         width: Number(shelf.width) || 15,
         height: Number(shelf.height) || 15,
         isCommon: Boolean(shelf.isCommon),
-        customLayers: shelf.customLayers || undefined, // Preserve custom layers
+        customLayers: shelf.customLayers || undefined,
       })),
       updatedAt: Date.now(),
     }
 
-    console.log("Validated layout:", JSON.stringify(validatedLayout, null, 2))
-
-    const success = await saveWarehouseLayout(validatedLayout as WarehouseLayout)
+    const success = await saveWarehouseLayout(validatedLayout)
 
     if (success) {
-      console.log("Layout saved successfully to Redis")
+      console.log("Layout saved successfully")
       return NextResponse.json({ success: true, layout: validatedLayout })
     } else {
-      console.error("Failed to save layout to Redis")
+      console.error("Failed to save layout")
       return NextResponse.json({ error: "Failed to save warehouse layout" }, { status: 500 })
     }
   } catch (error) {
@@ -98,7 +93,6 @@ export async function PUT(request: NextRequest) {
     const { action, shelfId } = await request.json()
 
     if (action === "checkProducts" && shelfId) {
-      const { getProductCountByShelf } = await import("@/lib/database")
       const productCount = await getProductCountByShelf(shelfId)
       return NextResponse.json({ productCount })
     }

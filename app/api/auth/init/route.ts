@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server"
-import { getStoredPassword, setStoredPassword } from "@/lib/auth-supabase"
+import { getStoredPassword, setStoredPassword } from "@/lib/auth-utils"
 
 export async function GET() {
   try {
-    // Check if password exists in Redis
     const password = await getStoredPassword()
 
     if (!password) {
-      // If no password is set, set a default one
-      // In production, this should be a secure randomly generated password
-      // that is communicated to the admin through a secure channel
       const defaultPassword = "warehouse_" + Math.random().toString(36).substring(2, 10)
       await setStoredPassword(defaultPassword)
 
@@ -22,7 +18,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Password already exists in Redis",
+      message: "Password already exists",
     })
   } catch (error) {
     console.error("Failed to initialize password:", error)

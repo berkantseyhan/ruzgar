@@ -1,5 +1,5 @@
 import { createServerClient } from "./supabase"
-import type { Product as SupabaseProduct } from "./supabase"
+import type { DepoRuzgarProduct } from "./supabase"
 
 // Legacy types for compatibility
 export type ShelfId = string
@@ -25,7 +25,7 @@ export interface FieldChange {
 }
 
 // Convert between legacy format and Supabase format
-const toSupabaseProduct = (product: Product): Omit<SupabaseProduct, "created_at" | "updated_at"> => ({
+const toSupabaseProduct = (product: Product): Omit<DepoRuzgarProduct, "created_at" | "updated_at"> => ({
   id: product.id,
   urun_adi: product.urunAdi,
   kategori: product.kategori,
@@ -36,7 +36,7 @@ const toSupabaseProduct = (product: Product): Omit<SupabaseProduct, "created_at"
   notlar: product.notlar,
 })
 
-const fromSupabaseProduct = (product: SupabaseProduct): Product => ({
+const fromSupabaseProduct = (product: DepoRuzgarProduct): Product => ({
   id: product.id,
   urunAdi: product.urun_adi,
   kategori: product.kategori,
@@ -48,14 +48,40 @@ const fromSupabaseProduct = (product: SupabaseProduct): Product => ({
   createdAt: new Date(product.created_at).getTime(),
 })
 
+// Test if tables exist and create them if they don't
+async function ensureTablesExist() {
+  try {
+    const supabase = createServerClient()
+
+    // Test if the main table exists by trying to query it
+    const { error } = await supabase
+      .from("Depo_Ruzgar_Products")
+      .select("count", { count: "exact", head: true })
+      .limit(1)
+
+    if (error && error.code === "42P01") {
+      // Table doesn't exist
+      console.error("❌ Depo_Ruzgar tables don't exist. Please run the SQL scripts first!")
+      throw new Error("Database tables are missing. Please run the SQL scripts to create the required tables.")
+    }
+
+    return true
+  } catch (error) {
+    console.error("Database table check failed:", error)
+    throw error
+  }
+}
+
 // Get products by shelf and layer
 export async function getProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer): Promise<Product[]> {
   try {
+    await ensureTablesExist()
+
     console.log(`Fetching products for shelf: ${shelfId}, layer: ${layer}`)
 
     const supabase = createServerClient()
     const { data, error } = await supabase
-      .from("products")
+      .from("Depo_Ruzgar_Products")
       .select("*")
       .eq("raf_no", shelfId)
       .eq("katman", layer)
@@ -71,17 +97,22 @@ export async function getProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer)
     return products
   } catch (error) {
     console.error("Error in getProductsByShelfAndLayer:", error)
-    return []
+    throw error
   }
 }
 
 // Get all products
 export async function getAllProducts(): Promise<Product[]> {
   try {
+    await ensureTablesExist()
+
     console.log("Fetching all products")
 
     const supabase = createServerClient()
-    const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false })
+    const { data, error } = await supabase
+      .from("Depo_Ruzgar_Products")
+      .select("*")
+      .order("created_at", { ascending: false })
 
     if (error) {
       console.error("Supabase error in getAllProducts:", error)
@@ -93,7 +124,7 @@ export async function getAllProducts(): Promise<Product[]> {
     return products
   } catch (error) {
     console.error("Error in getAllProducts:", error)
-    return []
+    throw error
   }
 }
 
@@ -119,12 +150,14 @@ function detectChanges(oldProduct: Product, newProduct: Product): FieldChange[] 
 // Save product (create or update)
 export async function saveProduct(product: Product, username: string, isUpdate?: boolean): Promise<boolean> {
   try {
+    await ensureTablesExist()
+
     console.log(`Saving product: ${product.urunAdi}, isUpdate: ${isUpdate}`)
 
     const supabase = createServerClient()
 
     // Check if product exists
-    const { data: existingData } = await supabase.from("products").select("*").eq("id", product.id).single()
+    const { data: existingData } = await supabase.from("Depo_Ruzgar_Products").select("*").eq("id", product.id).single()
 
     const existingProduct = existingData ? fromSupabaseProduct(existingData) : null
     const shouldMarkAsUpdate = isUpdate !== undefined ? isUpdate : !!existingProduct
@@ -137,7 +170,7 @@ export async function saveProduct(product: Product, username: string, isUpdate?:
 
     // Save product
     const productData = toSupabaseProduct(product)
-    const { error } = await supabase.from("products").upsert(productData)
+    const { error } = await supabase.from("Depo_Ruzgar_Products").upsert(productData)
 
     if (error) {
       console.error("Supabase error in saveProduct:", error)
@@ -169,17 +202,19 @@ export async function saveProduct(product: Product, username: string, isUpdate?:
     return true
   } catch (error) {
     console.error("Error in saveProduct:", error)
-    return false
+    throw error
   }
 }
 
 // Delete product
 export async function deleteProduct(product: Product, username: string): Promise<boolean> {
   try {
+    await ensureTablesExist()
+
     console.log(`Deleting product: ${product.id}`)
 
     const supabase = createServerClient()
-    const { error } = await supabase.from("products").delete().eq("id", product.id)
+    const { error } = await supabase.from("Depo_Ruzgar_Products").delete().eq("id", product.id)
 
     if (error) {
       console.error("Supabase error in deleteProduct:", error)
@@ -199,7 +234,7 @@ export async function deleteProduct(product: Product, username: string): Promise
     return true
   } catch (error) {
     console.error("Error in deleteProduct:", error)
-    return false
+    throw error
   }
 }
 
@@ -217,7 +252,7 @@ export async function logTransaction(
     console.log(`Logging transaction: ${actionType} - ${urunAdi} by ${username}`)
 
     const supabase = createServerClient()
-    const { error } = await supabase.from("transaction_logs").insert({
+    const { error } = await supabase.from("Depo_Ruzgar_Transaction_Logs").insert({
       action_type: actionType,
       raf_no: rafNo,
       katman: katman,
@@ -242,11 +277,13 @@ export async function logTransaction(
 // Get transaction logs
 export async function getTransactionLogs(): Promise<any[]> {
   try {
+    await ensureTablesExist()
+
     console.log("Fetching transaction logs")
 
     const supabase = createServerClient()
     const { data, error } = await supabase
-      .from("transaction_logs")
+      .from("Depo_Ruzgar_Transaction_Logs")
       .select("*")
       .order("timestamp", { ascending: false })
       .limit(1000)
@@ -280,10 +317,16 @@ export async function getTransactionLogs(): Promise<any[]> {
 // Warehouse layout functions
 export async function getWarehouseLayout(): Promise<any> {
   try {
+    await ensureTablesExist()
+
     console.log("Fetching warehouse layout")
 
     const supabase = createServerClient()
-    const { data, error } = await supabase.from("warehouse_layouts").select("*").eq("id", "default").single()
+    const { data, error } = await supabase
+      .from("Depo_Ruzgar_Warehouse_Layouts")
+      .select("*")
+      .eq("id", "default")
+      .single()
 
     if (error && error.code !== "PGRST116") {
       // Not found error
@@ -343,10 +386,12 @@ export async function getWarehouseLayout(): Promise<any> {
 // Save warehouse layout
 export async function saveWarehouseLayout(layout: any): Promise<boolean> {
   try {
+    await ensureTablesExist()
+
     console.log("Saving warehouse layout")
 
     const supabase = createServerClient()
-    const { error } = await supabase.from("warehouse_layouts").upsert({
+    const { error } = await supabase.from("Depo_Ruzgar_Warehouse_Layouts").upsert({
       id: layout.id || "default",
       name: layout.name,
       shelves: layout.shelves,
@@ -396,11 +441,13 @@ export async function resetWarehouseLayout(): Promise<boolean> {
 // Get product count by shelf
 export async function getProductCountByShelf(shelfId: ShelfId): Promise<number> {
   try {
+    await ensureTablesExist()
+
     console.log(`Counting products for shelf: ${shelfId}`)
 
     const supabase = createServerClient()
     const { count, error } = await supabase
-      .from("products")
+      .from("Depo_Ruzgar_Products")
       .select("*", { count: "exact", head: true })
       .eq("raf_no", shelfId)
 
@@ -469,18 +516,20 @@ export function generateUniqueShelfId(existingShelves: any[]): ShelfId {
 // Test Supabase connection
 export async function testSupabaseConnection(): Promise<{ success: boolean; message: string }> {
   try {
+    await ensureTablesExist()
+
     const supabase = createServerClient()
-    const { data, error } = await supabase.from("products").select("count", { count: "exact", head: true })
+    const { data, error } = await supabase.from("Depo_Ruzgar_Products").select("count", { count: "exact", head: true })
 
     if (error) {
       return { success: false, message: `Supabase connection error: ${error.message}` }
     }
 
-    return { success: true, message: "Supabase connection successful" }
+    return { success: true, message: `Supabase connection successful. Found ${data} products.` }
   } catch (error) {
     return {
       success: false,
-      message: `Supabase connection error: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Database error: ${error instanceof Error ? error.message : String(error)}`,
     }
   }
 }

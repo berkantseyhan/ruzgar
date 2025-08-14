@@ -18,8 +18,8 @@ export const createServerClient = () => {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
-// Database types
-export interface Product {
+// Database types for Depo_Ruzgar tables
+export interface DepoRuzgarProduct {
   id: string
   urun_adi: string
   kategori: string
@@ -32,7 +32,7 @@ export interface Product {
   updated_at: string
 }
 
-export interface TransactionLog {
+export interface DepoRuzgarTransactionLog {
   id: string
   timestamp: string
   action_type: "Ekleme" | "Güncelleme" | "Silme"
@@ -45,7 +45,7 @@ export interface TransactionLog {
   created_at: string
 }
 
-export interface WarehouseLayout {
+export interface DepoRuzgarWarehouseLayout {
   id: string
   name: string
   shelves: any[]
@@ -53,7 +53,7 @@ export interface WarehouseLayout {
   updated_at: string
 }
 
-export interface AuthPassword {
+export interface DepoRuzgarAuthPassword {
   id: string
   password_hash: string
   created_at: string

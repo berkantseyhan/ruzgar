@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (password: string) => {
     try {
-      // Verify password against Redis stored password
+      // Verify password against stored password
       const response = await fetch("/api/auth/verify", {
         method: "POST",
         headers: {

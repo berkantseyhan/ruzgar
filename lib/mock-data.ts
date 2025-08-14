@@ -1,166 +1,188 @@
-import { v4 as uuidv4 } from "uuid"
-import type { Product, ShelfId, Layer, TransactionLog } from "./redis"
-
-// Mock data for development and fallback
-export const mockProducts: Record<string, Product[]> = {
-  A_üstkat: [
-    {
-      id: uuidv4(),
-      urunAdi: "M8 Somun",
-      kategori: "somun",
-      olcu: "M8",
-      rafNo: "A",
-      katman: "üst kat",
-      kilogram: 5.2,
-      notlar: "Paslanmaz çelik",
-      createdAt: Date.now() - 86400000 * 2,
-    },
-    {
-      id: uuidv4(),
-      urunAdi: "M10 Vida",
-      kategori: "vida",
-      olcu: "M10x50",
-      rafNo: "A",
-      katman: "üst kat",
-      kilogram: 7.5,
-      notlar: "Galvanizli",
-      createdAt: Date.now() - 86400000,
-    },
-  ],
-  B_ortakat: [
-    {
-      id: uuidv4(),
-      urunAdi: "M6 Pul",
-      kategori: "pul",
-      olcu: "M6",
-      rafNo: "B",
-      katman: "orta kat",
-      kilogram: 2.3,
-      notlar: "Düz pul",
-      createdAt: Date.now() - 86400000 * 3,
-    },
-  ],
-  C_altkat: [
-    {
-      id: uuidv4(),
-      urunAdi: "M12 Civata",
-      kategori: "civata",
-      olcu: "M12x75",
-      rafNo: "C",
-      katman: "alt kat",
-      kilogram: 12.8,
-      notlar: "Yüksek dayanımlı",
-      createdAt: Date.now() - 86400000 * 4,
-    },
-  ],
+export interface Product {
+  id: string
+  urunAdi: string
+  kategori: string
+  olcu: string
+  rafNo: string
+  katman: string
+  kilogram: number
+  notlar: string
+  createdAt: number
 }
+
+export interface TransactionLog {
+  id: string
+  timestamp: number
+  actionType: string
+  rafNo: string
+  katman: string
+  urunAdi: string
+  username: string
+  changes?: Array<{
+    field: string
+    oldValue: string | number
+    newValue: string | number
+  }>
+  productDetails?: Partial<Product>
+}
+
+// Mock products data
+export const mockProducts: Product[] = [
+  {
+    id: "1",
+    urunAdi: "M8 Civata",
+    kategori: "civata",
+    olcu: "8mm",
+    rafNo: "A",
+    katman: "üst kat",
+    kilogram: 2.5,
+    notlar: "Paslanmaz çelik",
+    createdAt: Date.now() - 86400000,
+  },
+  {
+    id: "2",
+    urunAdi: "M10 Somun",
+    kategori: "somun",
+    olcu: "10mm",
+    rafNo: "A",
+    katman: "orta kat",
+    kilogram: 1.8,
+    notlar: "Galvanizli",
+    createdAt: Date.now() - 172800000,
+  },
+  {
+    id: "3",
+    urunAdi: "M6 Vida",
+    kategori: "vida",
+    olcu: "6mm",
+    rafNo: "B",
+    katman: "üst kat",
+    kilogram: 0.5,
+    notlar: "Kısa vida",
+    createdAt: Date.now() - 259200000,
+  },
+  {
+    id: "4",
+    urunAdi: "Pul 8mm",
+    kategori: "pul",
+    olcu: "8mm",
+    rafNo: "C",
+    katman: "alt kat",
+    kilogram: 0.2,
+    notlar: "Düz pul",
+    createdAt: Date.now() - 345600000,
+  },
+  {
+    id: "5",
+    urunAdi: "M12 Saplama",
+    kategori: "saplama",
+    olcu: "12mm",
+    rafNo: "D",
+    katman: "üst kat",
+    kilogram: 3.2,
+    notlar: "Uzun saplama",
+    createdAt: Date.now() - 432000000,
+  },
+]
 
 // Mock transaction logs
 export const mockTransactionLogs: TransactionLog[] = [
   {
-    id: uuidv4(),
-    action: "CREATE",
-    productId: "mock-product-1",
-    productName: "M8 Somun",
-    shelf: "A",
-    layer: "üst kat",
-    timestamp: Date.now() - 86400000 * 2,
-    username: "admin",
-    details: "Yeni ürün eklendi",
-    changes: {},
-  },
-  {
-    id: uuidv4(),
-    action: "UPDATE",
-    productId: "mock-product-2",
-    productName: "M10 Vida",
-    shelf: "A",
-    layer: "üst kat",
-    timestamp: Date.now() - 86400000,
-    username: "admin",
-    details: "Ürün güncellendi",
-    changes: {
-      kilogram: { old: "7.0", new: "7.5" },
+    id: "log1",
+    timestamp: Date.now() - 3600000,
+    actionType: "Ekleme",
+    rafNo: "A",
+    katman: "üst kat",
+    urunAdi: "M8 Civata",
+    username: "Admin",
+    productDetails: {
+      urunAdi: "M8 Civata",
+      olcu: "8mm",
+      kilogram: 2.5,
+      rafNo: "A",
+      katman: "üst kat",
     },
   },
   {
-    id: uuidv4(),
-    action: "DELETE",
-    productId: "mock-product-3",
-    productName: "M6 Pul",
-    shelf: "B",
-    layer: "orta kat",
-    timestamp: Date.now() - 86400000 * 3,
-    username: "admin",
-    details: "Ürün silindi",
-    changes: {},
+    id: "log2",
+    timestamp: Date.now() - 7200000,
+    actionType: "Güncelleme",
+    rafNo: "B",
+    katman: "orta kat",
+    urunAdi: "M10 Somun",
+    username: "Kullanıcı1",
+    changes: [
+      {
+        field: "kilogram",
+        oldValue: 1.5,
+        newValue: 1.8,
+      },
+    ],
   },
 ]
 
-export function getMockProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer): Product[] {
-  const key = `${shelfId}_${layer.replace(" ", "")}`
-  return mockProducts[key] || []
+// In-memory storage
+const inMemoryProducts = [...mockProducts]
+let inMemoryLogs = [...mockTransactionLogs]
+
+// Mock data functions
+export function getMockProductsByShelfAndLayer(shelfId: string, layer: string): Product[] {
+  return inMemoryProducts.filter((product) => product.rafNo === shelfId && product.katman === layer)
 }
 
 export function getAllMockProducts(): Product[] {
-  return Object.values(mockProducts).flat()
+  return [...inMemoryProducts]
 }
 
 export function saveMockProduct(product: Product): boolean {
-  const key = `${product.rafNo}_${product.katman.replace(" ", "")}`
+  try {
+    const existingIndex = inMemoryProducts.findIndex((p) => p.id === product.id)
 
-  if (!mockProducts[key]) {
-    mockProducts[key] = []
+    if (existingIndex >= 0) {
+      inMemoryProducts[existingIndex] = product
+    } else {
+      inMemoryProducts.push(product)
+    }
+
+    return true
+  } catch (error) {
+    console.error("Error saving mock product:", error)
+    return false
   }
-
-  const index = mockProducts[key].findIndex((p) => p.id === product.id)
-
-  if (index >= 0) {
-    mockProducts[key][index] = product
-  } else {
-    mockProducts[key].push(product)
-  }
-
-  return true
 }
 
 export function deleteMockProduct(product: Product): boolean {
-  const key = `${product.rafNo}_${product.katman.replace(" ", "")}`
-
-  if (!mockProducts[key]) {
+  try {
+    const index = inMemoryProducts.findIndex((p) => p.id === product.id)
+    if (index >= 0) {
+      inMemoryProducts.splice(index, 1)
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error("Error deleting mock product:", error)
     return false
   }
-
-  const index = mockProducts[key].findIndex((p) => p.id === product.id)
-
-  if (index >= 0) {
-    mockProducts[key].splice(index, 1)
-    return true
-  }
-
-  return false
 }
 
-// Add a function to find a product by ID
 export function getMockProductById(id: string): Product | undefined {
-  for (const key in mockProducts) {
-    const product = mockProducts[key].find((p) => p.id === id)
-    if (product) {
-      return product
-    }
-  }
-  return undefined
+  return inMemoryProducts.find((product) => product.id === id)
 }
 
-// Mock transaction log functions
 export function addMockTransactionLog(log: Omit<TransactionLog, "id">): void {
   const newLog: TransactionLog = {
     ...log,
-    id: uuidv4(),
+    id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
   }
-  mockTransactionLogs.unshift(newLog) // Add to beginning for newest first
+
+  inMemoryLogs.unshift(newLog)
+
+  // Keep only last 1000 logs
+  if (inMemoryLogs.length > 1000) {
+    inMemoryLogs = inMemoryLogs.slice(0, 1000)
+  }
 }
 
 export function getMockTransactionLogs(): TransactionLog[] {
-  return mockTransactionLogs
+  return [...inMemoryLogs]
 }
