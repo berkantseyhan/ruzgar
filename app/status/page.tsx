@@ -1,36 +1,46 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, CheckCircle, RefreshCw } from "lucide-react"
+import { CheckCircle, XCircle, RefreshCw, Database, Wifi, WifiOff } from "lucide-react"
+
+interface SystemStatus {
+  status: string
+  message: string
+  connection: {
+    success: boolean
+    message: string
+  }
+  mode: string
+  timestamp: string
+}
 
 export default function StatusPage() {
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading")
-  const [message, setMessage] = useState("")
-  const [details, setDetails] = useState<any>(null)
-  const [usingMockData, setUsingMockData] = useState(false)
+  const [status, setStatus] = useState<SystemStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const checkStatus = async () => {
-    setStatus("loading")
+    setLoading(true)
+    setError(null)
+
     try {
       const response = await fetch("/api/test")
       const data = await response.json()
 
-      if (data.status === "success") {
-        setStatus("success")
-        setMessage(data.message)
+      if (response.ok) {
+        setStatus(data)
       } else {
-        setStatus("error")
-        setMessage(data.message || "Redis bağlantısı başarısız")
+        setError(data.message || "Test failed")
+        setStatus(data)
       }
-
-      setUsingMockData(data.usingMockData || false)
-      setDetails(data)
-    } catch (error) {
-      setStatus("error")
-      setMessage("Redis bağlantısı kontrol edilirken bir hata oluştu")
-      setDetails({ error: String(error) })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error")
+      setStatus(null)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -39,50 +49,160 @@ export default function StatusPage() {
   }, [])
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {status === "loading" && <RefreshCw className="h-5 w-5 animate-spin" />}
-            {status === "success" && <CheckCircle className="h-5 w-5 text-green-500" />}
-            {status === "error" && <AlertCircle className="h-5 w-5 text-destructive" />}
-            Sistem Durumu
-          </CardTitle>
-          <CardDescription>Redis bağlantı durumu</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <h3 className="font-medium">Durum:</h3>
-              <p className={status === "success" ? "text-green-500" : status === "error" ? "text-destructive" : ""}>
-                {status === "loading" ? "Kontrol ediliyor..." : message}
-              </p>
-            </div>
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">Sistem Durumu</h1>
+        <p className="text-muted-foreground">Depo yönetim sisteminin mevcut durumu ve bağlantı bilgileri</p>
+      </div>
 
-            {usingMockData && (
-              <div className="p-3 bg-yellow-100 dark:bg-yellow-900 rounded-md">
-                <p className="text-yellow-800 dark:text-yellow-200 text-sm">
-                  Sistem şu anda test verilerini kullanıyor. Redis bağlantısı olmadan da uygulama çalışabilir.
+      <div className="grid gap-6">
+        {/* Ana Durum Kartı */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle className="text-2xl">Sistem Durumu</CardTitle>
+              <CardDescription>
+                Son kontrol: {status?.timestamp ? new Date(status.timestamp).toLocaleString("tr-TR") : "Bilinmiyor"}
+              </CardDescription>
+            </div>
+            <Button onClick={checkStatus} disabled={loading} size="sm">
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              Yenile
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              {loading ? (
+                <>
+                  <RefreshCw className="h-5 w-5 animate-spin text-blue-500" />
+                  <span className="text-lg">Kontrol ediliyor...</span>
+                </>
+              ) : error && !status ? (
+                <>
+                  <XCircle className="h-5 w-5 text-red-500" />
+                  <span className="text-lg text-red-600">Hata: {error}</span>
+                </>
+              ) : status?.status === "success" ? (
+                <>
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-lg text-green-600">Sistem Çalışıyor</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-5 w-5 text-red-500" />
+                  <span className="text-lg text-red-600">Sistem Hatası</span>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Çalışma Modu */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Çalışma Modu
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-medium">Mock Data Modu</p>
+                <p className="text-sm text-muted-foreground">
+                  Sistem şu anda bellekte saklanan test verileri ile çalışıyor
                 </p>
               </div>
-            )}
+              <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                <WifiOff className="h-3 w-3 mr-1" />
+                OFFLINE
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
 
-            {details && (
-              <div>
-                <h3 className="font-medium">Detaylar:</h3>
-                <pre className="mt-2 rounded-md bg-muted p-4 overflow-auto text-xs">
-                  {JSON.stringify(details, null, 2)}
-                </pre>
+        {/* Bağlantı Durumu */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wifi className="h-5 w-5" />
+              Veritabanı Bağlantısı
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <p className="font-medium">Redis</p>
+                  <p className="text-sm text-muted-foreground">Upstash Redis bağlantısı</p>
+                </div>
+                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                  <XCircle className="h-3 w-3 mr-1" />
+                  Devre Dışı
+                </Badge>
               </div>
-            )}
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={checkStatus} disabled={status === "loading"}>
-            {status === "loading" ? "Kontrol Ediliyor..." : "Yenile"}
-          </Button>
-        </CardFooter>
-      </Card>
+
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <p className="font-medium">Mock Data</p>
+                  <p className="text-sm text-muted-foreground">Bellekte saklanan test verileri</p>
+                </div>
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Aktif
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Sistem Mesajları */}
+        {status && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Sistem Mesajları</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800">Sistem Mesajı:</p>
+                  <p className="text-sm text-blue-700">{status.message}</p>
+                </div>
+
+                {status.connection && (
+                  <div
+                    className={`p-3 border rounded-lg ${
+                      status.connection.success ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-medium ${status.connection.success ? "text-green-800" : "text-red-800"}`}
+                    >
+                      Bağlantı Durumu:
+                    </p>
+                    <p className={`text-sm ${status.connection.success ? "text-green-700" : "text-red-700"}`}>
+                      {status.connection.message}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Uyarı Mesajı */}
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="text-orange-800">⚠️ Önemli Bilgi</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-orange-700">
+              Sistem şu anda <strong>Mock Data Modu</strong>'nda çalışıyor. Tüm veriler bellekte saklanıyor ve sayfa
+              yenilendiğinde kaybolacak. Kalıcı veri saklama için Supabase veritabanı kurulumu gerekiyor.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

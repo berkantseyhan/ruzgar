@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyPassword } from "@/lib/auth-utils"
+import { verifyPassword } from "@/lib/auth-supabase"
 
 export async function POST(request: NextRequest) {
   try {

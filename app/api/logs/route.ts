@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getTransactionLogs } from "@/lib/redis"
+import { getTransactionLogs } from "@/lib/database" // Redis yerine database
 
 export async function GET() {
   try {

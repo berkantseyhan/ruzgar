@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getStoredPassword, setStoredPassword } from "@/lib/auth-utils"
+import { getStoredPassword, setStoredPassword } from "@/lib/auth-supabase"
 
 export async function GET() {
   try {

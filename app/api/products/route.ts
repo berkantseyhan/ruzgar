@@ -6,7 +6,7 @@ import {
   getAllProducts,
   type ShelfId,
   type Layer,
-} from "@/lib/redis"
+} from "@/lib/database" // Redis yerine database
 
 export async function GET(request: NextRequest) {
   try {

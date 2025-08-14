@@ -3,8 +3,8 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
-import type { ShelfId, ShelfLayout, WarehouseLayout } from "@/lib/redis"
-import { generateUniqueShelfId } from "@/lib/redis"
+import type { ShelfId, ShelfLayout, WarehouseLayout } from "@/lib/database"
+import { generateUniqueShelfId } from "@/lib/database"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"

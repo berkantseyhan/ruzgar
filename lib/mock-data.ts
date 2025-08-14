@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from "uuid"
-import type { Product, ShelfId, Layer } from "./redis"
+import type { Product, ShelfId, Layer, TransactionLog } from "./redis"
 
 // Mock data for development and fallback
-const mockProducts: Record<string, Product[]> = {
+export const mockProducts: Record<string, Product[]> = {
   A_üstkat: [
     {
       id: uuidv4(),
@@ -54,6 +54,48 @@ const mockProducts: Record<string, Product[]> = {
     },
   ],
 }
+
+// Mock transaction logs
+export const mockTransactionLogs: TransactionLog[] = [
+  {
+    id: uuidv4(),
+    action: "CREATE",
+    productId: "mock-product-1",
+    productName: "M8 Somun",
+    shelf: "A",
+    layer: "üst kat",
+    timestamp: Date.now() - 86400000 * 2,
+    username: "admin",
+    details: "Yeni ürün eklendi",
+    changes: {},
+  },
+  {
+    id: uuidv4(),
+    action: "UPDATE",
+    productId: "mock-product-2",
+    productName: "M10 Vida",
+    shelf: "A",
+    layer: "üst kat",
+    timestamp: Date.now() - 86400000,
+    username: "admin",
+    details: "Ürün güncellendi",
+    changes: {
+      kilogram: { old: "7.0", new: "7.5" },
+    },
+  },
+  {
+    id: uuidv4(),
+    action: "DELETE",
+    productId: "mock-product-3",
+    productName: "M6 Pul",
+    shelf: "B",
+    layer: "orta kat",
+    timestamp: Date.now() - 86400000 * 3,
+    username: "admin",
+    details: "Ürün silindi",
+    changes: {},
+  },
+]
 
 export function getMockProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer): Product[] {
   const key = `${shelfId}_${layer.replace(" ", "")}`
@@ -108,4 +150,17 @@ export function getMockProductById(id: string): Product | undefined {
     }
   }
   return undefined
+}
+
+// Mock transaction log functions
+export function addMockTransactionLog(log: Omit<TransactionLog, "id">): void {
+  const newLog: TransactionLog = {
+    ...log,
+    id: uuidv4(),
+  }
+  mockTransactionLogs.unshift(newLog) // Add to beginning for newest first
+}
+
+export function getMockTransactionLogs(): TransactionLog[] {
+  return mockTransactionLogs
 }

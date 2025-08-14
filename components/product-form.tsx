@@ -4,8 +4,8 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { v4 as uuidv4 } from "uuid"
-import type { Product, ShelfId, Layer, WarehouseLayout } from "@/lib/redis"
-import { getAvailableLayersForShelf } from "@/lib/redis"
+import type { Product, ShelfId, Layer, WarehouseLayout } from "@/lib/database"
+import { getAvailableLayersForShelf } from "@/lib/database"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -75,7 +75,7 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
       }
     }
 
-    // Use the helper function from redis.ts
+    // Use the helper function from database.ts
     const layers = getAvailableLayersForShelf(shelfId as ShelfId, warehouseLayout)
     return layers.map((layer) => ({
       value: layer,

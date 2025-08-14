@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import type { Layer, Product, ShelfId, WarehouseLayout } from "@/lib/redis"
-import { getAvailableLayersForShelf } from "@/lib/redis"
+import type { Layer, Product, ShelfId, WarehouseLayout } from "@/lib/database"
+import { getAvailableLayersForShelf } from "@/lib/database"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"

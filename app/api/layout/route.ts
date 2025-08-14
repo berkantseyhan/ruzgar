@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getWarehouseLayout, saveWarehouseLayout, resetWarehouseLayout, type WarehouseLayout } from "@/lib/redis"
+import { getWarehouseLayout, saveWarehouseLayout, resetWarehouseLayout, type WarehouseLayout } from "@/lib/database"
 
 export async function GET() {
   try {
@@ -98,7 +98,7 @@ export async function PUT(request: NextRequest) {
     const { action, shelfId } = await request.json()
 
     if (action === "checkProducts" && shelfId) {
-      const { getProductCountByShelf } = await import("@/lib/redis")
+      const { getProductCountByShelf } = await import("@/lib/database")
       const productCount = await getProductCountByShelf(shelfId)
       return NextResponse.json({ productCount })
     }
