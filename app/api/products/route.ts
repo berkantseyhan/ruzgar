@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     console.error("❌ API: GET error:", error)
     return NextResponse.json(
       {
-        error: "Failed to fetch products",
+        error: "Ürünler yüklenirken hata oluştu",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!product || !product.urunAdi || !product.kategori || !product.olcu || !product.rafNo || !product.katman) {
       console.error("❌ API: Missing required product fields")
-      return NextResponse.json({ error: "Missing required product fields" }, { status: 400 })
+      return NextResponse.json({ error: "Gerekli ürün bilgileri eksik" }, { status: 400 })
     }
 
     const success = await saveProduct(product, username || "Bilinmeyen Kullanıcı", isUpdate)
@@ -59,13 +59,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     } else {
       console.error("❌ API: Failed to save product")
-      return NextResponse.json({ error: "Failed to save product" }, { status: 500 })
+      return NextResponse.json({ error: "Ürün kaydedilemedi" }, { status: 500 })
     }
   } catch (error) {
     console.error("❌ API: POST error:", error)
     return NextResponse.json(
       {
-        error: "Failed to save product",
+        error: "Ürün kaydedilirken hata oluştu",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
@@ -82,7 +82,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!product || !product.id) {
       console.error("❌ API: Missing product ID")
-      return NextResponse.json({ error: "Missing product ID" }, { status: 400 })
+      return NextResponse.json({ error: "Ürün ID'si eksik" }, { status: 400 })
     }
 
     const success = await deleteProduct(product, username || "Bilinmeyen Kullanıcı")
@@ -92,13 +92,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true })
     } else {
       console.error("❌ API: Failed to delete product")
-      return NextResponse.json({ error: "Failed to delete product" }, { status: 500 })
+      return NextResponse.json({ error: "Ürün silinemedi" }, { status: 500 })
     }
   } catch (error) {
     console.error("❌ API: DELETE error:", error)
     return NextResponse.json(
       {
-        error: "Failed to delete product",
+        error: "Ürün silinirken hata oluştu",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },

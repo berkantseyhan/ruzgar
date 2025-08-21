@@ -91,10 +91,16 @@ export default function ShelfBlock({ id, onClick, isCommon = false }: ShelfBlock
     )
   }
 
+  const handleClick = () => {
+    if (onClick && typeof onClick === "function") {
+      onClick(id)
+    }
+  }
+
   return (
     <div
       className={`w-full h-full rounded-md ${getShelfColor()} flex items-center justify-center cursor-pointer transition-all duration-300 shadow-md border border-transparent hover:shadow-lg hover:border-white/20 shelf-block`}
-      onClick={() => onClick(id)}
+      onClick={handleClick}
     >
       <div className="flex items-center justify-center">
         {getShelfIcon()}

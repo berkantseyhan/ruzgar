@@ -3,13 +3,11 @@ import { testSupabaseConnection } from "@/lib/database"
 
 export async function GET() {
   try {
-    console.log("🔍 Testing system status...")
-
     const connectionTest = await testSupabaseConnection()
 
-    const response = {
+    return NextResponse.json({
       timestamp: new Date().toISOString(),
-      status: connectionTest.success ? "healthy" : "degraded",
+      status: connectionTest.success ? "healthy" : "error",
       mode: connectionTest.mode,
       database: {
         connected: connectionTest.success,
@@ -17,35 +15,28 @@ export async function GET() {
         tables: connectionTest.tables || [],
       },
       environment: {
-        nodeEnv: process.env.NODE_ENV,
-        hasSupabaseUrl: !!process.env.SUPABASE_URL,
-        hasSupabaseKey: !!process.env.SUPABASE_ANON_KEY,
+        nodeEnv: process.env.NODE_ENV || "unknown",
+        hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       },
-    }
-
-    console.log("✅ System status check completed:", response.status)
-
-    return NextResponse.json(response)
+    })
   } catch (error) {
-    console.error("❌ System status check failed:", error)
+    console.error("API Test Error:", error)
 
-    return NextResponse.json(
-      {
-        timestamp: new Date().toISOString(),
-        status: "error",
-        mode: "error",
-        database: {
-          connected: false,
-          message: `System error: ${error instanceof Error ? error.message : String(error)}`,
-          tables: [],
-        },
-        environment: {
-          nodeEnv: process.env.NODE_ENV,
-          hasSupabaseUrl: !!process.env.SUPABASE_URL,
-          hasSupabaseKey: !!process.env.SUPABASE_ANON_KEY,
-        },
+    return NextResponse.json({
+      timestamp: new Date().toISOString(),
+      status: "error",
+      mode: "error",
+      database: {
+        connected: false,
+        message: `Sistem hatası: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`,
+        tables: [],
       },
-      { status: 500 },
-    )
+      environment: {
+        nodeEnv: process.env.NODE_ENV || "unknown",
+        hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        hasSupabaseKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      },
+    })
   }
 }

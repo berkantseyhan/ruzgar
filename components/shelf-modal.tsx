@@ -16,7 +16,66 @@ import { Badge } from "@/components/ui/badge"
 interface ShelfModalProps {
   shelfId: ShelfId
   onClose: () => void
-  onRefresh?: () => void // Add this
+  onRefresh?: () => void
+}
+
+// Validation function to ensure layout has proper structure
+function validateAndNormalizeLayout(data: any): WarehouseLayout | null {
+  console.log("Validating layout data in shelf modal:", data)
+
+  // If data is null or undefined, return null
+  if (!data) {
+    console.log("Data is null/undefined")
+    return null
+  }
+
+  // Extract layout from data if it's wrapped
+  const layout = data.layout || data
+
+  // Validate layout structure
+  if (!layout || typeof layout !== "object") {
+    console.log("Invalid layout structure")
+    return null
+  }
+
+  // Ensure shelves is an array
+  let normalizedShelves = []
+
+  if (Array.isArray(layout.shelves)) {
+    console.log("Shelves is already an array")
+    normalizedShelves = layout.shelves.map(normalizeShelf)
+  } else if (layout.shelves && typeof layout.shelves === "object") {
+    console.log("Converting shelves object to array")
+    // Convert object to array
+    normalizedShelves = Object.values(layout.shelves).map(normalizeShelf)
+  } else {
+    console.log("No valid shelves found")
+    normalizedShelves = []
+  }
+
+  const normalizedLayout: WarehouseLayout = {
+    shelves: normalizedShelves,
+    lastModified: layout.lastModified || Date.now(),
+    version: layout.version || "1.0",
+  }
+
+  console.log("Normalized layout in shelf modal:", normalizedLayout)
+  return normalizedLayout
+}
+
+// Normalize individual shelf data
+function normalizeShelf(shelf: any) {
+  return {
+    id: shelf.id || `shelf-${Math.random()}`,
+    x: typeof shelf.x === "number" ? shelf.x : 10,
+    y: typeof shelf.y === "number" ? shelf.y : 10,
+    width: typeof shelf.width === "number" ? shelf.width : 80,
+    height: typeof shelf.height === "number" ? shelf.height : 60,
+    isCommon: Boolean(shelf.isCommon),
+    rotation: typeof shelf.rotation === "number" ? shelf.rotation : 0,
+    name: shelf.name || shelf.id || "Unnamed Shelf",
+    customLayers: Array.isArray(shelf.customLayers) ? shelf.customLayers : undefined,
+  }
 }
 
 export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalProps) {
@@ -44,32 +103,55 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
             Pragma: "no-cache",
           },
         })
+
         if (response.ok) {
+          // Check if response is JSON
+          const contentType = response.headers.get("content-type")
+          if (!contentType || !contentType.includes("application/json")) {
+            const textResponse = await response.text()
+            console.error("Non-JSON response received:", textResponse.substring(0, 200))
+            throw new Error("Sunucu JSON yanıtı döndürmedi")
+          }
+
           const data = await response.json()
-          const layout: WarehouseLayout = data.layout
-          console.log("Fetched layout:", layout)
-          setWarehouseLayout(layout)
+          console.log("Raw layout data received in shelf modal:", data)
 
-          // Get available layers for this shelf
-          const layers = getAvailableLayersForShelf(shelfId, layout)
-          console.log(`Available layers for ${shelfId}:`, layers)
+          // Validate and normalize the layout data
+          const layout = validateAndNormalizeLayout(data)
 
-          const layerOptions = layers.map((layer) => ({
-            value: layer as Layer,
-            label: layer.charAt(0).toUpperCase() + layer.slice(1),
-          }))
+          if (layout && Array.isArray(layout.shelves)) {
+            console.log("Validated layout:", layout)
+            setWarehouseLayout(layout)
 
-          setAvailableLayers(layerOptions)
-          console.log("Layer options set:", layerOptions)
+            // Get available layers for this shelf
+            const layers = getAvailableLayersForShelf(shelfId, layout)
+            console.log(`Available layers for ${shelfId}:`, layers)
 
-          // Set the first available layer as active, but preserve current if valid
-          if (layerOptions.length > 0) {
-            const currentLayerValid = layerOptions.some((layer) => layer.value === activeLayer)
-            if (!currentLayerValid) {
-              console.log(`Setting active layer to: ${layerOptions[0].value}`)
-              setActiveLayer(layerOptions[0].value)
-            } else {
-              console.log(`Keeping current active layer: ${activeLayer}`)
+            const layerOptions = layers.map((layer) => ({
+              value: layer as Layer,
+              label: layer.charAt(0).toUpperCase() + layer.slice(1),
+            }))
+
+            setAvailableLayers(layerOptions)
+            console.log("Layer options set:", layerOptions)
+
+            // Set the first available layer as active, but preserve current if valid
+            if (layerOptions.length > 0) {
+              const currentLayerValid = layerOptions.some((layer) => layer.value === activeLayer)
+              if (!currentLayerValid) {
+                console.log(`Setting active layer to: ${layerOptions[0].value}`)
+                setActiveLayer(layerOptions[0].value)
+              } else {
+                console.log(`Keeping current active layer: ${activeLayer}`)
+              }
+            }
+          } else {
+            console.error("Failed to validate layout, using fallback")
+            // Fallback to default layers
+            const defaultLayers = getDefaultLayers(shelfId)
+            setAvailableLayers(defaultLayers)
+            if (defaultLayers.length > 0 && !defaultLayers.some((layer) => layer.value === activeLayer)) {
+              setActiveLayer(defaultLayers[0].value)
             }
           }
         } else {
@@ -93,7 +175,7 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
     }
 
     fetchLayout()
-  }, [shelfId, refreshTrigger]) // Add refreshTrigger dependency
+  }, [shelfId, refreshTrigger])
 
   // Get default layers based on shelf type (fallback)
   const getDefaultLayers = (shelfId: ShelfId): { value: Layer; label: string }[] => {
@@ -125,7 +207,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
     setLoading(true)
     setError(null)
     try {
-      // Use a try-catch block to handle network errors
       const encodedLayer = encodeURIComponent(activeLayer)
       const url = `/api/products?shelfId=${shelfId}&layer=${encodedLayer}`
       console.log(`Fetching products from: ${url}`)
@@ -134,33 +215,42 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
         method: "GET",
         headers: {
           "Cache-Control": "no-cache",
+          "Content-Type": "application/json",
         },
       })
 
       console.log(`Response status: ${response.status}`)
+      console.log(`Response content-type: ${response.headers.get("content-type")}`)
 
-      if (!response.ok) {
-        let errorMessage = `Server responded with status: ${response.status}`
-        try {
-          const errorData = await response.json()
-          if (errorData && errorData.error) {
-            errorMessage = errorData.error
-          }
-        } catch (e) {
-          console.error("Failed to parse error response:", e)
-        }
-        throw new Error(errorMessage)
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await response.text()
+        console.error("Non-JSON response received:", textResponse.substring(0, 200))
+        throw new Error("Sunucu JSON yanıtı döndürmedi")
       }
 
       const data = await response.json()
+      console.log("Parsed JSON data:", data)
+
+      if (!response.ok) {
+        throw new Error(data.error || `Server error: ${response.status}`)
+      }
+
+      if (data.success === false) {
+        throw new Error(data.error || "API returned success: false")
+      }
+
       console.log(`Received ${data.products?.length || 0} products`)
       setProducts(data.products || [])
     } catch (err) {
       console.error("Error fetching products:", err)
-      setError(err instanceof Error ? err.message : "Ürünler yüklenirken bir hata oluştu")
+      const errorMessage = err instanceof Error ? err.message : "Ürünler yüklenirken bir hata oluştu"
+      setError(errorMessage)
+      setProducts([]) // Set empty array on error
       toast({
         title: "Hata",
-        description: "Ürünler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -187,17 +277,18 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
         }),
       })
 
-      if (!response.ok) {
-        let errorMessage = `Server responded with status: ${response.status}`
-        try {
-          const errorData = await response.json()
-          if (errorData && errorData.error) {
-            errorMessage = errorData.error
-          }
-        } catch (e) {
-          console.error("Failed to parse error response:", e)
-        }
-        throw new Error(errorMessage)
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await response.text()
+        console.error("Non-JSON response received:", textResponse.substring(0, 200))
+        throw new Error("Sunucu JSON yanıtı döndürmedi")
+      }
+
+      const data = await response.json()
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || `Server error: ${response.status}`)
       }
 
       setProducts(products.filter((p) => p.id !== product.id))
@@ -207,9 +298,10 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
       })
     } catch (error) {
       console.error("Error deleting product:", error)
+      const errorMessage = error instanceof Error ? error.message : "Ürün silinirken bir hata oluştu"
       toast({
         title: "Hata",
-        description: error instanceof Error ? error.message : "Ürün silinirken bir hata oluştu.",
+        description: errorMessage,
         variant: "destructive",
       })
     }
@@ -227,7 +319,7 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   const handleFormSuccess = () => {
     setEditingProduct(null)
     setIsAddingProduct(false)
-    fetchProducts() // Make sure this is called to refresh the product list
+    fetchProducts() // Refresh the product list
   }
 
   const getShelfColor = () => {

@@ -5,12 +5,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Search, Download, Loader2, Filter, Calendar, Clock, User, Edit } from "lucide-react"
+import {
+  RefreshCw,
+  Search,
+  Download,
+  Loader2,
+  Filter,
+  Calendar,
+  Clock,
+  User,
+  Edit,
+  LogIn,
+  LogOut,
+  Settings,
+} from "lucide-react"
 import type { TransactionLog } from "@/lib/redis"
 import { useToast } from "@/components/ui/use-toast"
 import { convertHeadersForCSV } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import type { JSX } from "react"
 
 export default function TransactionLogComponent() {
   const [logs, setLogs] = useState<TransactionLog[]>([])
@@ -85,8 +99,27 @@ export default function TransactionLogComponent() {
         return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
       case "Silme":
         return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+      case "Giriş":
+        return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300"
+      case "Çıkış":
+        return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
+      case "Layout Değişikliği":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+    }
+  }
+
+  const getActionTypeIcon = (actionType: string) => {
+    switch (actionType) {
+      case "Giriş":
+        return <LogIn className="h-3 w-3" />
+      case "Çıkış":
+        return <LogOut className="h-3 w-3" />
+      case "Layout Değişikliği":
+        return <Settings className="h-3 w-3" />
+      default:
+        return <Edit className="h-3 w-3" />
     }
   }
 
@@ -114,6 +147,57 @@ export default function TransactionLogComponent() {
 
   // Format changes for display
   const formatChanges = (log: TransactionLog): JSX.Element => {
+    // For login/logout actions, show session info
+    if ((log.actionType === "Giriş" || log.actionType === "Çıkış") && log.sessionInfo) {
+      const sessionInfo = log.sessionInfo
+      return (
+        <div className="space-y-1">
+          <div className="text-xs">
+            <Badge
+              variant="outline"
+              className={`mr-1 ${
+                log.actionType === "Giriş"
+                  ? "bg-emerald-50 dark:bg-emerald-900 border-emerald-200 dark:border-emerald-800"
+                  : "bg-orange-50 dark:bg-orange-900 border-orange-200 dark:border-orange-800"
+              }`}
+            >
+              {log.actionType === "Giriş" ? "Oturum Açıldı" : "Oturum Kapatıldı"}
+            </Badge>
+            {sessionInfo.loginTime && log.actionType === "Giriş" && (
+              <span className="font-mono bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 rounded text-xs">
+                {formatDate(sessionInfo.loginTime)}
+              </span>
+            )}
+            {sessionInfo.logoutTime && log.actionType === "Çıkış" && (
+              <span className="font-mono bg-orange-50 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 px-1.5 py-0.5 rounded text-xs">
+                Süre:{" "}
+                {sessionInfo.loginTime ? Math.round((sessionInfo.logoutTime - sessionInfo.loginTime) / 60000) : "?"} dk
+              </span>
+            )}
+          </div>
+          {sessionInfo.ipAddress && <div className="text-xs text-muted-foreground">IP: {sessionInfo.ipAddress}</div>}
+        </div>
+      )
+    }
+
+    // For layout changes, show layout details
+    if (log.actionType === "Layout Değişikliği" && log.productDetails) {
+      const details = log.productDetails
+      return (
+        <div className="text-xs">
+          <Badge
+            variant="outline"
+            className="mr-1 bg-purple-50 dark:bg-purple-900 border-purple-200 dark:border-purple-800"
+          >
+            Layout İşlemi
+          </Badge>
+          <span className="font-mono bg-purple-50 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded">
+            {details.olcu || "Layout değişikliği"}
+          </span>
+        </div>
+      )
+    }
+
     // For update actions, show field changes
     if (log.actionType === "Güncelleme" && log.changes && log.changes.length > 0) {
       return (
@@ -178,6 +262,25 @@ export default function TransactionLogComponent() {
 
   // Format changes for CSV export
   const formatChangesForCSV = (log: TransactionLog): string => {
+    // For login/logout actions
+    if ((log.actionType === "Giriş" || log.actionType === "Çıkış") && log.sessionInfo) {
+      const sessionInfo = log.sessionInfo
+      let result = log.actionType === "Giriş" ? "Oturum Açıldı" : "Oturum Kapatıldı"
+      if (sessionInfo.ipAddress) {
+        result += ` (IP: ${sessionInfo.ipAddress})`
+      }
+      if (sessionInfo.loginTime && sessionInfo.logoutTime && log.actionType === "Çıkış") {
+        const duration = Math.round((sessionInfo.logoutTime - sessionInfo.loginTime) / 60000)
+        result += ` - Süre: ${duration} dk`
+      }
+      return result
+    }
+
+    // For layout changes
+    if (log.actionType === "Layout Değişikliği" && log.productDetails) {
+      return log.productDetails.olcu || "Layout değişikliği"
+    }
+
     // For update actions, show field changes
     if (log.actionType === "Güncelleme" && log.changes && log.changes.length > 0) {
       return log.changes
@@ -273,7 +376,7 @@ export default function TransactionLogComponent() {
               </div>
               İşlem Geçmişi
             </CardTitle>
-            <CardDescription>Tüm ürün işlemlerinin kaydı</CardDescription>
+            <CardDescription>Tüm kullanıcı aktiviteleri ve ürün işlemlerinin kaydı</CardDescription>
           </div>
           <Badge variant="outline" className="font-normal">
             {filteredLogs.length} kayıt
@@ -296,7 +399,7 @@ export default function TransactionLogComponent() {
               size="icon"
               onClick={fetchLogs}
               disabled={loading}
-              className="transition-colors duration-200"
+              className="transition-colors duration-200 bg-transparent"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               <span className="sr-only">Yenile</span>
@@ -306,7 +409,7 @@ export default function TransactionLogComponent() {
               size="icon"
               onClick={handleExportCSV}
               disabled={filteredLogs.length === 0}
-              className="transition-colors duration-200"
+              className="transition-colors duration-200 bg-transparent"
             >
               <Download className="h-4 w-4" />
               <span className="sr-only">CSV İndir</span>
@@ -323,7 +426,7 @@ export default function TransactionLogComponent() {
         ) : error ? (
           <div className="text-center py-8 text-destructive bg-destructive/10 m-6 rounded-lg border border-destructive/20">
             <p className="font-medium">{error}</p>
-            <Button onClick={fetchLogs} className="mt-4" variant="outline">
+            <Button onClick={fetchLogs} className="mt-4 bg-transparent" variant="outline">
               Tekrar Dene
             </Button>
           </div>
@@ -365,17 +468,39 @@ export default function TransactionLogComponent() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={`${getActionTypeClass(log.actionType)} font-normal`}>
+                      <Badge
+                        variant="secondary"
+                        className={`${getActionTypeClass(log.actionType)} font-normal flex items-center gap-1`}
+                      >
+                        {getActionTypeIcon(log.actionType)}
                         {log.actionType}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="font-normal">
-                        {log.rafNo}
-                      </Badge>
+                      {log.rafNo !== "sistem" ? (
+                        <Badge variant="outline" className="font-normal">
+                          {log.rafNo}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
                     </TableCell>
-                    <TableCell>{log.katman}</TableCell>
-                    <TableCell className="font-medium">{log.urunAdi}</TableCell>
+                    <TableCell>
+                      {log.katman !== "oturum" && log.katman !== "layout" ? (
+                        log.katman
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {log.urunAdi !== "Kullanıcı Girişi" &&
+                      log.urunAdi !== "Kullanıcı Çıkışı" &&
+                      !log.urunAdi.includes("Layout") ? (
+                        log.urunAdi
+                      ) : (
+                        <span className="text-muted-foreground text-sm">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>{formatChanges(log)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">

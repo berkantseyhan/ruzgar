@@ -1,58 +1,45 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 
 interface AuthContextType {
   isAuthenticated: boolean
   username: string | null
-  login: (password: string) => Promise<boolean>
-  logout: () => void
   isLoading: boolean
-  setUsername: (name: string) => void
-  needsUsername: boolean
+  login: (password: string) => Promise<boolean>
+  setUsername: (username: string) => void
+  logout: () => void
+  loginTime: number | null
 }
 
-const AuthContext = createContext<AuthContextType>({
-  isAuthenticated: false,
-  username: null,
-  login: async () => false,
-  logout: () => {},
-  isLoading: true,
-  setUsername: () => {},
-  needsUsername: false,
-})
-
-export const useAuth = () => useContext(AuthContext)
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const [username, setUsernameState] = useState<string | null>(null)
-  const [needsUsername, setNeedsUsername] = useState(false)
+  const [loginTime, setLoginTime] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     // Check if user is already authenticated
-    const auth = localStorage.getItem("auth")
+    const authStatus = localStorage.getItem("isAuthenticated")
     const storedUsername = localStorage.getItem("username")
+    const storedLoginTime = localStorage.getItem("loginTime")
 
-    if (auth === "true") {
+    if (authStatus === "true" && storedUsername) {
       setIsAuthenticated(true)
-
-      // If authenticated but no username, we need to prompt for it
-      if (!storedUsername) {
-        setNeedsUsername(true)
-      } else {
-        setUsernameState(storedUsername)
-      }
+      setUsernameState(storedUsername)
+      setLoginTime(storedLoginTime ? Number.parseInt(storedLoginTime) : null)
     }
 
     setIsLoading(false)
   }, [])
 
-  const login = async (password: string) => {
+  const login = async (password: string): Promise<boolean> => {
     try {
-      // Verify password against stored password
+      console.log("Attempting login...")
+
       const response = await fetch("/api/auth/verify", {
         method: "POST",
         headers: {
@@ -61,43 +48,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ password }),
       })
 
-      if (!response.ok) {
-        return false
-      }
-
       const data = await response.json()
+      console.log("Login response:", data)
 
       if (data.success) {
-        setIsAuthenticated(true)
-        localStorage.setItem("auth", "true")
-
-        // Check if username exists
-        const storedUsername = localStorage.getItem("username")
-        if (!storedUsername) {
-          setNeedsUsername(true)
-        } else {
-          setUsernameState(storedUsername)
-        }
-
+        // Password is correct, but don't set as authenticated yet
+        // Wait for username to be set
+        console.log("Password verified, waiting for username")
         return true
+      } else {
+        console.log("Login failed:", data.message)
+        return false
       }
-
-      return false
     } catch (error) {
       console.error("Login error:", error)
       return false
     }
   }
 
-  const logout = () => {
-    setIsAuthenticated(false)
-    localStorage.removeItem("auth")
-    // We don't remove username on logout to remember the user
+  const setUsername = (newUsername: string) => {
+    const currentTime = Date.now()
+
+    setIsAuthenticated(true)
+    setUsernameState(newUsername)
+    setLoginTime(currentTime)
+
+    // Store in localStorage
+    localStorage.setItem("isAuthenticated", "true")
+    localStorage.setItem("username", newUsername)
+    localStorage.setItem("loginTime", currentTime.toString())
+
+    console.log("Username set and user authenticated:", newUsername)
   }
 
-  const setUsername = (name: string) => {
-    setUsernameState(name)
-    setNeedsUsername(false)
+  const logout = () => {
+    console.log("Logging out...")
+    setIsAuthenticated(false)
+    setUsernameState(null)
+    setLoginTime(null)
+
+    // Clear localStorage
+    localStorage.removeItem("isAuthenticated")
+    localStorage.removeItem("username")
+    localStorage.removeItem("loginTime")
+
+    console.log("Logout successful")
   }
 
   return (
@@ -105,14 +100,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         isAuthenticated,
         username,
-        login,
-        logout,
         isLoading,
+        login,
         setUsername,
-        needsUsername,
+        logout,
+        loginTime,
       }}
     >
       {children}
     </AuthContext.Provider>
   )
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
 }

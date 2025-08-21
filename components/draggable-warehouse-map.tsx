@@ -1,19 +1,23 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import type { ShelfId, ShelfLayout, WarehouseLayout } from "@/lib/database"
-import { generateUniqueShelfId } from "@/lib/database"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/use-toast"
-import { Save, RotateCcw, Lock, Unlock, Grid, Settings, Plus, Trash2, Edit3, Check, X, Layers } from "lucide-react"
+import { generateUniqueShelfId, logLayoutChange } from "@/lib/database"
 import ShelfModal from "@/components/shelf-modal"
 import ShelfLayersEditor from "@/components/shelf-layers-editor"
 import ConfirmDialog from "@/components/confirm-dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { useToast } from "@/components/ui/use-toast"
+import { Save, Lock, Unlock, Grid, Plus, Trash2, Edit3, Check, X, Layers, RotateCw } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/lib/auth-context"
+
+interface DraggableWarehouseMapProps {
+  onShelfClick: (shelfId: ShelfId) => void
+}
 
 interface DraggableShelfProps {
   shelf: ShelfLayout
@@ -23,6 +27,7 @@ interface DraggableShelfProps {
   onClick: (shelfId: ShelfId) => void
   onStartNameEdit: (shelfId: ShelfId) => void
   onEditLayers: (shelf: ShelfLayout) => void
+  onRotate: (shelfId: ShelfId) => void
   isEditingName: boolean
   editingName: string
   onNameChange: (name: string) => void
@@ -38,6 +43,7 @@ function DraggableShelf({
   onClick,
   onStartNameEdit,
   onEditLayers,
+  onRotate,
   isEditingName,
   editingName,
   onNameChange,
@@ -85,7 +91,7 @@ function DraggableShelf({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!isEditMode || isEditingName) {
-      if (!isEditingName) {
+      if (!isEditingName && onClick) {
         onClick(shelf.id)
       }
       return
@@ -110,26 +116,44 @@ function DraggableShelf({
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    onDelete(shelf.id)
+    if (onDelete) {
+      onDelete(shelf.id)
+    }
   }
 
   const handleEditNameClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    onStartNameEdit(shelf.id)
+    if (onStartNameEdit) {
+      onStartNameEdit(shelf.id)
+    }
   }
 
   const handleEditLayersClick = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    onEditLayers(shelf)
+    if (onEditLayers) {
+      onEditLayers(shelf)
+    }
+  }
+
+  const handleRotateClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (onRotate) {
+      onRotate(shelf.id)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      onSaveName()
+      if (onSaveName) {
+        onSaveName()
+      }
     } else if (e.key === "Escape") {
-      onCancelNameEdit()
+      if (onCancelNameEdit) {
+        onCancelNameEdit()
+      }
     }
   }
 
@@ -137,7 +161,7 @@ function DraggableShelf({
     const handleMouseMove = (e: MouseEvent) => {
       if (!isEditMode || isEditingName) return
 
-      if (isDragging && shelfRef.current) {
+      if (isDragging && shelfRef.current && onUpdate) {
         const container = shelfRef.current.parentElement
         if (!container) return
 
@@ -151,7 +175,7 @@ function DraggableShelf({
         onUpdate({ ...shelf, x: newX, y: newY })
       }
 
-      if (isResizing && shelfRef.current) {
+      if (isResizing && shelfRef.current && onUpdate) {
         const container = shelfRef.current.parentElement
         if (!container) return
 
@@ -182,6 +206,12 @@ function DraggableShelf({
     }
   }, [isDragging, isResizing, dragStart, initialPosition, initialSize, shelf, onUpdate, isEditMode, isEditingName])
 
+  // Get rotation transform
+  const getRotationTransform = () => {
+    const rotation = shelf.rotation || 0
+    return `rotate(${rotation}deg)`
+  }
+
   return (
     <div
       ref={shelfRef}
@@ -195,6 +225,8 @@ function DraggableShelf({
         top: `${shelf.y}%`,
         width: `${shelf.width}%`,
         height: `${shelf.height}%`,
+        transform: getRotationTransform(),
+        transformOrigin: "center center",
       }}
       onMouseDown={handleMouseDown}
     >
@@ -203,7 +235,7 @@ function DraggableShelf({
           <Input
             ref={inputRef}
             value={editingName}
-            onChange={(e) => onNameChange(e.target.value)}
+            onChange={(e) => onNameChange && onNameChange(e.target.value)}
             onKeyDown={handleKeyDown}
             className="h-6 text-xs bg-white text-black border-none p-1 min-w-0 flex-1"
             style={{ fontSize: "10px" }}
@@ -247,6 +279,16 @@ function DraggableShelf({
             <Layers className="h-3 w-3" />
           </button>
 
+          {/* Rotate button */}
+          <button
+            className="absolute top-1 left-15 w-6 h-6 bg-orange-500 hover:bg-orange-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 opacity-80 hover:opacity-100"
+            onMouseDown={handleRotateClick}
+            title="Döndür (90°)"
+            style={{ left: "60px" }}
+          >
+            <RotateCw className="h-3 w-3" />
+          </button>
+
           {/* Delete button */}
           <button
             className="absolute top-1 right-1 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 opacity-80 hover:opacity-100"
@@ -269,53 +311,82 @@ function DraggableShelf({
   )
 }
 
-// Add this function after the existing helper functions, around line 100
-const calculateAdaptiveLayout = (shelves: ShelfLayout[]): ShelfLayout[] => {
-  if (shelves.length === 0) return shelves
+// Utility function to validate and normalize layout data
+function validateAndNormalizeLayout(data: any): WarehouseLayout {
+  console.log("🔍 Validating layout data:", data)
 
-  // Calculate optimal grid dimensions based on shelf count
-  const shelfCount = shelves.length
-  let cols: number
-  let rows: number
-
-  if (shelfCount <= 4) {
-    cols = Math.min(shelfCount, 2)
-    rows = Math.ceil(shelfCount / cols)
-  } else if (shelfCount <= 9) {
-    cols = 3
-    rows = Math.ceil(shelfCount / cols)
-  } else if (shelfCount <= 16) {
-    cols = 4
-    rows = Math.ceil(shelfCount / cols)
-  } else {
-    cols = 5
-    rows = Math.ceil(shelfCount / cols)
+  // If no data, return default layout
+  if (!data) {
+    console.log("❌ No layout data, using default")
+    return getDefaultLayout()
   }
 
-  // Calculate dimensions for each shelf
-  const shelfWidth = Math.max(15, Math.min(25, 90 / cols))
-  const shelfHeight = Math.max(12, Math.min(20, 80 / rows))
+  // Ensure we have a valid layout structure
+  const layout = data.layout || data
 
-  // Calculate spacing
-  const horizontalSpacing = (100 - cols * shelfWidth) / (cols + 1)
-  const verticalSpacing = (100 - rows * shelfHeight) / (rows + 1)
+  // Validate and normalize shelves array
+  let shelves: ShelfLayout[] = []
 
-  // Apply adaptive positioning
-  return shelves.map((shelf, index) => {
-    const row = Math.floor(index / cols)
-    const col = index % cols
+  if (Array.isArray(layout.shelves)) {
+    // If shelves is already an array, normalize each shelf
+    shelves = layout.shelves.map((shelf: any, index: number) => ({
+      id: shelf.id || `Shelf${index + 1}`,
+      x: typeof shelf.x === "number" ? shelf.x : 10 + index * 25,
+      y: typeof shelf.y === "number" ? shelf.y : 10,
+      width: typeof shelf.width === "number" ? shelf.width : 20,
+      height: typeof shelf.height === "number" ? shelf.height : 15,
+      rotation: typeof shelf.rotation === "number" ? shelf.rotation : 0,
+      isCommon: Boolean(shelf.isCommon),
+      customLayers: Array.isArray(shelf.customLayers) ? shelf.customLayers : undefined,
+    }))
+  } else if (layout.shelves && typeof layout.shelves === "object") {
+    // If shelves is an object, convert to array
+    console.log("⚠️ Converting shelves object to array")
+    const shelvesObj = layout.shelves
+    shelves = Object.keys(shelvesObj).map((key, index) => {
+      const shelf = shelvesObj[key]
+      return {
+        id: shelf.id || key,
+        x: typeof shelf.x === "number" ? shelf.x : 10 + index * 25,
+        y: typeof shelf.y === "number" ? shelf.y : 10,
+        width: typeof shelf.width === "number" ? shelf.width : 20,
+        height: typeof shelf.height === "number" ? shelf.height : 15,
+        rotation: typeof shelf.rotation === "number" ? shelf.rotation : 0,
+        isCommon: Boolean(shelf.isCommon),
+        customLayers: Array.isArray(shelf.customLayers) ? shelf.customLayers : undefined,
+      }
+    })
+  } else {
+    // If shelves is invalid or missing, use default shelves
+    console.log("❌ Invalid or missing shelves, using default")
+    shelves = getDefaultLayout().shelves
+  }
 
-    const x = horizontalSpacing + col * (shelfWidth + horizontalSpacing)
-    const y = verticalSpacing + row * (shelfHeight + verticalSpacing)
+  const normalizedLayout: WarehouseLayout = {
+    id: layout.id || "default",
+    name: layout.name || "Varsayılan Layout",
+    shelves: shelves,
+    createdAt: layout.createdAt || Date.now(),
+    updatedAt: layout.updatedAt || Date.now(),
+  }
 
-    return {
-      ...shelf,
-      x: Math.max(0, Math.min(95 - shelfWidth, x)),
-      y: Math.max(0, Math.min(95 - shelfHeight, y)),
-      width: shelfWidth,
-      height: shelfHeight,
-    }
-  })
+  console.log("✅ Layout normalized:", normalizedLayout)
+  return normalizedLayout
+}
+
+// Default layout function
+function getDefaultLayout(): WarehouseLayout {
+  return {
+    id: "default",
+    name: "Varsayılan Layout",
+    shelves: [
+      { id: "A", x: 10, y: 10, width: 20, height: 15, rotation: 0, isCommon: false },
+      { id: "B", x: 40, y: 10, width: 20, height: 15, rotation: 0, isCommon: false },
+      { id: "C", x: 70, y: 10, width: 20, height: 15, rotation: 0, isCommon: false },
+    ],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
 }
 
 export default function DraggableWarehouseMap() {
@@ -337,6 +408,7 @@ export default function DraggableWarehouseMap() {
     productCount: 0,
   })
   const { toast } = useToast()
+  const { username } = useAuth()
 
   useEffect(() => {
     fetchLayout()
@@ -345,17 +417,42 @@ export default function DraggableWarehouseMap() {
   const fetchLayout = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/layout")
+      console.log("🔄 Fetching layout from API...")
+
+      const response = await fetch("/api/layout", {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      })
+
       if (!response.ok) {
-        throw new Error("Failed to fetch layout")
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Response is not JSON")
+      }
+
       const data = await response.json()
-      setLayout(data.layout)
+      console.log("📦 Raw API response:", data)
+
+      // Validate and normalize the layout data
+      const validatedLayout = validateAndNormalizeLayout(data)
+      console.log("✅ Setting validated layout:", validatedLayout)
+
+      setLayout(validatedLayout)
     } catch (error) {
-      console.error("Error fetching layout:", error)
+      console.error("❌ Error fetching layout:", error)
+
+      // Set default layout on error
+      const defaultLayout = getDefaultLayout()
+      setLayout(defaultLayout)
+
       toast({
-        title: "Hata",
-        description: "Layout yüklenirken bir hata oluştu.",
+        title: "Uyarı",
+        description: "Layout yüklenirken bir hata oluştu. Varsayılan layout kullanılıyor.",
         variant: "destructive",
       })
     } finally {
@@ -364,13 +461,14 @@ export default function DraggableWarehouseMap() {
   }
 
   const handleShelfUpdate = async (updatedShelf: ShelfLayout) => {
-    if (!layout) return
+    if (!layout || !Array.isArray(layout.shelves)) return
 
     const updatedShelves = layout.shelves.map((shelf) => (shelf.id === updatedShelf.id ? updatedShelf : shelf))
 
     const updatedLayout = {
       ...layout,
       shelves: updatedShelves,
+      updatedAt: Date.now(),
     }
 
     setLayout(updatedLayout)
@@ -383,7 +481,7 @@ export default function DraggableWarehouseMap() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ layout: updatedLayout }),
+        body: JSON.stringify({ layout: updatedLayout, username }),
       })
 
       if (!response.ok) {
@@ -413,7 +511,7 @@ export default function DraggableWarehouseMap() {
   }
 
   const handleSaveName = async () => {
-    if (!layout || !editingShelfId || !editingName.trim()) {
+    if (!layout || !Array.isArray(layout.shelves) || !editingShelfId || !editingName.trim()) {
       handleCancelNameEdit()
       return
     }
@@ -442,6 +540,7 @@ export default function DraggableWarehouseMap() {
     const updatedLayout = {
       ...layout,
       shelves: updatedShelves,
+      updatedAt: Date.now(),
     }
 
     setLayout(updatedLayout)
@@ -454,11 +553,16 @@ export default function DraggableWarehouseMap() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ layout: updatedLayout }),
+        body: JSON.stringify({ layout: updatedLayout, username }),
       })
 
       if (!response.ok) {
         throw new Error("Failed to save layout")
+      }
+
+      // Log the name change
+      if (username) {
+        await logLayoutChange(username, "Raf İsmi Değiştirildi", `"${editingShelfId}" → "${trimmedName}"`)
       }
 
       toast({
@@ -490,7 +594,7 @@ export default function DraggableWarehouseMap() {
   }
 
   const handleSaveLayers = async (updatedShelf: ShelfLayout) => {
-    if (!layout) return
+    if (!layout || !Array.isArray(layout.shelves)) return
 
     console.log("Saving layers for shelf:", updatedShelf.id)
     console.log("Updated shelf data:", updatedShelf)
@@ -500,6 +604,7 @@ export default function DraggableWarehouseMap() {
     const updatedLayout = {
       ...layout,
       shelves: updatedShelves,
+      updatedAt: Date.now(),
     }
 
     console.log("Updated layout:", updatedLayout)
@@ -513,7 +618,7 @@ export default function DraggableWarehouseMap() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ layout: updatedLayout }),
+        body: JSON.stringify({ layout: updatedLayout, username }),
       })
 
       if (!response.ok) {
@@ -521,6 +626,15 @@ export default function DraggableWarehouseMap() {
       }
 
       console.log("Layout saved successfully")
+
+      // Log the layer change
+      if (username) {
+        await logLayoutChange(
+          username,
+          "Raf Katmanları Güncellendi",
+          `${updatedShelf.id} rafının katmanları değiştirildi`,
+        )
+      }
 
       // Force refresh of any open shelf modals
       setTimeout(() => {
@@ -548,8 +662,32 @@ export default function DraggableWarehouseMap() {
     })
   }
 
+  const handleRotateShelf = async (shelfId: ShelfId) => {
+    if (!layout || !Array.isArray(layout.shelves)) return
+
+    const shelf = layout.shelves.find((s) => s.id === shelfId)
+    if (!shelf) return
+
+    // Rotate by 90 degrees (0 -> 90 -> 180 -> 270 -> 0)
+    const currentRotation = shelf.rotation || 0
+    const newRotation = (currentRotation + 90) % 360
+
+    const updatedShelf = { ...shelf, rotation: newRotation }
+    await handleShelfUpdate(updatedShelf)
+
+    // Log the rotation change
+    if (username) {
+      await logLayoutChange(username, "Raf Döndürüldü", `${shelfId} rafı ${newRotation}° döndürüldü`)
+    }
+
+    toast({
+      title: "Raf Döndürüldü",
+      description: `${shelfId} rafı ${newRotation}° döndürüldü.`,
+    })
+  }
+
   const handleAddShelf = async () => {
-    if (!layout) return
+    if (!layout || !Array.isArray(layout.shelves)) return
 
     const newShelfId = generateUniqueShelfId(layout.shelves)
     const newShelf: ShelfLayout = {
@@ -558,12 +696,14 @@ export default function DraggableWarehouseMap() {
       y: 10,
       width: 15,
       height: 15,
+      rotation: 0,
       isCommon: false,
     }
 
     const updatedLayout = {
       ...layout,
       shelves: [...layout.shelves, newShelf],
+      updatedAt: Date.now(),
     }
 
     setLayout(updatedLayout)
@@ -576,11 +716,16 @@ export default function DraggableWarehouseMap() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ layout: updatedLayout }),
+        body: JSON.stringify({ layout: updatedLayout, username }),
       })
 
       if (!response.ok) {
         throw new Error("Failed to save layout")
+      }
+
+      // Log the shelf addition
+      if (username) {
+        await logLayoutChange(username, "Yeni Raf Eklendi", `${newShelfId} rafı eklendi`)
       }
 
       toast({
@@ -592,49 +737,6 @@ export default function DraggableWarehouseMap() {
       toast({
         title: "Hata",
         description: "Yeni raf eklenirken bir hata oluştu.",
-        variant: "destructive",
-      })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleAdaptiveLayout = async () => {
-    if (!layout) return
-
-    const adaptiveShelves = calculateAdaptiveLayout(layout.shelves)
-
-    const updatedLayout = {
-      ...layout,
-      shelves: adaptiveShelves,
-    }
-
-    setLayout(updatedLayout)
-
-    // Auto-save the adaptive layout
-    try {
-      setSaving(true)
-      const response = await fetch("/api/layout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ layout: updatedLayout }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to save layout")
-      }
-
-      toast({
-        title: "Adaptif Düzen Uygulandı",
-        description: `${layout.shelves.length} raf otomatik olarak düzenlendi ve kaydedildi.`,
-      })
-    } catch (error) {
-      console.error("Error saving adaptive layout:", error)
-      toast({
-        title: "Hata",
-        description: "Adaptif düzen kaydedilirken bir hata oluştu.",
         variant: "destructive",
       })
     } finally {
@@ -673,15 +775,47 @@ export default function DraggableWarehouseMap() {
     }
   }
 
-  const confirmDeleteShelf = () => {
-    if (!layout || !deleteConfirm.shelfId) return
+  const confirmDeleteShelf = async () => {
+    if (!layout || !Array.isArray(layout.shelves) || !deleteConfirm.shelfId) return
 
     const updatedShelves = layout.shelves.filter((shelf) => shelf.id !== deleteConfirm.shelfId)
 
-    setLayout({
+    const updatedLayout = {
       ...layout,
       shelves: updatedShelves,
-    })
+      updatedAt: Date.now(),
+    }
+
+    setLayout(updatedLayout)
+
+    // Auto-save the layout
+    try {
+      setSaving(true)
+      const response = await fetch("/api/layout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ layout: updatedLayout, username }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save layout")
+      }
+
+      // Log the shelf deletion
+      if (username) {
+        await logLayoutChange(
+          username,
+          "Raf Silindi",
+          `${deleteConfirm.shelfId} rafı silindi (${deleteConfirm.productCount} ürün vardı)`,
+        )
+      }
+    } catch (error) {
+      console.error("Error saving layout after delete:", error)
+    } finally {
+      setSaving(false)
+    }
 
     toast({
       title: "Raf Silindi",
@@ -709,11 +843,20 @@ export default function DraggableWarehouseMap() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ layout }),
+        body: JSON.stringify({ layout, username }),
       })
 
       if (!response.ok) {
         throw new Error("Failed to save layout")
+      }
+
+      // Log the manual save
+      if (username) {
+        await logLayoutChange(
+          username,
+          "Layout Manuel Kaydedildi",
+          `${layout.shelves.length} raf içeren layout manuel olarak kaydedildi`,
+        )
       }
 
       toast({
@@ -729,31 +872,6 @@ export default function DraggableWarehouseMap() {
       })
     } finally {
       setSaving(false)
-    }
-  }
-
-  const handleResetLayout = async () => {
-    try {
-      const response = await fetch("/api/layout", {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to reset layout")
-      }
-
-      await fetchLayout()
-      toast({
-        title: "Başarılı",
-        description: "Depo yerleşimi varsayılan haline getirildi.",
-      })
-    } catch (error) {
-      console.error("Error resetting layout:", error)
-      toast({
-        title: "Hata",
-        description: "Layout sıfırlanırken bir hata oluştu.",
-        variant: "destructive",
-      })
     }
   }
 
@@ -780,12 +898,12 @@ export default function DraggableWarehouseMap() {
     )
   }
 
-  if (!layout) {
+  if (!layout || !Array.isArray(layout.shelves)) {
     return (
       <Card className="w-full">
         <CardContent className="flex items-center justify-center h-96">
           <div className="text-center">
-            <p className="text-destructive mb-4">Layout yüklenemedi</p>
+            <p className="text-destructive mb-4">Layout yüklenemedi veya geçersiz format</p>
             <Button onClick={fetchLayout}>Tekrar Dene</Button>
           </div>
         </CardContent>
@@ -805,7 +923,7 @@ export default function DraggableWarehouseMap() {
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
             {isEditMode
-              ? "Rafları sürükleyin, boyutlandırın, isimlerini ve katmanlarını düzenleyin"
+              ? "Rafları sürükleyin, boyutlandırın, döndürün, isimlerini ve katmanlarını düzenleyin"
               : "Raf detaylarını görmek için tıklayın"}
           </p>
         </div>
@@ -840,17 +958,6 @@ export default function DraggableWarehouseMap() {
               </Button>
 
               <Button
-                variant="outline"
-                size="sm"
-                onClick={handleResetLayout}
-                disabled={!!editingShelfId}
-                className="flex items-center gap-2 bg-transparent"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Sıfırla
-              </Button>
-
-              <Button
                 size="sm"
                 onClick={handleSaveLayout}
                 disabled={saving || !!editingShelfId}
@@ -863,6 +970,18 @@ export default function DraggableWarehouseMap() {
           )}
         </div>
       </div>
+
+      {/* Küçük düzenleme modu bildirimi - Ana alanın dışında */}
+      {isEditMode && (
+        <div className="mb-3 flex justify-center">
+          <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs flex items-center gap-2 shadow-sm">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span className="font-medium">Düzenleme Aktif</span>
+            <span className="opacity-75">•</span>
+            <span className="opacity-90">Mavi: İsim | Mor: Katman | Turuncu: Döndür | Kırmızı: Sil</span>
+          </div>
+        </div>
+      )}
 
       <div className="relative w-full max-w-5xl mx-auto aspect-[5/3] bg-muted/20 rounded-lg p-6 overflow-hidden border border-border shadow-md">
         {/* Grid background */}
@@ -890,6 +1009,7 @@ export default function DraggableWarehouseMap() {
             onClick={handleShelfClick}
             onStartNameEdit={handleStartNameEdit}
             onEditLayers={handleEditLayers}
+            onRotate={handleRotateShelf}
             isEditingName={editingShelfId === shelf.id}
             editingName={editingName}
             onNameChange={handleNameChange}
@@ -897,21 +1017,6 @@ export default function DraggableWarehouseMap() {
             onCancelNameEdit={handleCancelNameEdit}
           />
         ))}
-
-        {/* Edit mode overlay */}
-        {isEditMode && (
-          <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-2 rounded-md text-sm">
-            <div className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              <span>Düzenleme Modu Aktif</span>
-            </div>
-            <p className="text-xs mt-1 opacity-80">
-              Mavi: İsim | Mor: Katmanlar | Sürükle: Taşı | Sağ alt: Boyutlandır | Kırmızı X: Sil
-              <br />
-              Adaptif Düzen: Rafları otomatik olarak düzenler | Tüm değişiklikler otomatik kaydedilir
-            </p>
-          </div>
-        )}
 
         {/* Add shelf hint when no shelves */}
         {isEditMode && layout.shelves.length === 0 && (

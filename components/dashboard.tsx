@@ -14,14 +14,36 @@ import { convertHeadersForCSV } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 
 export default function Dashboard() {
-  const { logout, isLoading, username } = useAuth()
+  const { logout, isLoading, username, loginTime } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const router = useRouter()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("harita")
   const [isExporting, setIsExporting] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (!username) return
+
+    setIsLoggingOut(true)
+
+    try {
+      // Log the user logout
+      await fetch("/api/auth/logout-log", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username,
+          loginTime,
+        }),
+      })
+    } catch (error) {
+      console.error("Error logging user logout:", error)
+      // Continue with logout even if logging fails
+    }
+
     logout()
     router.push("/login")
   }
@@ -161,9 +183,10 @@ export default function Dashboard() {
               variant="ghost"
               size="icon"
               onClick={handleLogout}
+              disabled={isLoggingOut}
               className="rounded-full transition-colors duration-200"
             >
-              <LogOut className="h-4 w-4" />
+              {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
               <span className="sr-only">Çıkış Yap</span>
             </Button>
           </div>

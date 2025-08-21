@@ -1,15 +1,15 @@
 "use client"
 
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { AlertTriangle } from "lucide-react"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface ConfirmDialogProps {
   open: boolean
@@ -22,7 +22,7 @@ interface ConfirmDialogProps {
   onConfirm: () => void
 }
 
-export default function ConfirmDialog({
+export function ConfirmDialog({
   open,
   onOpenChange,
   title,
@@ -38,30 +38,26 @@ export default function ConfirmDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            {variant === "destructive" && (
-              <div className="bg-destructive/10 p-2 rounded-full">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-            )}
-            <div>
-              <DialogTitle>{title}</DialogTitle>
-              <DialogDescription className="mt-2">{description}</DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-        <DialogFooter className="flex gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {cancelText}
-          </Button>
-          <Button variant={variant === "destructive" ? "destructive" : "default"} onClick={handleConfirm}>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{cancelText}</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirm}
+            className={
+              variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""
+            }
+          >
             {confirmText}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
+
+export default ConfirmDialog

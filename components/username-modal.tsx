@@ -3,83 +3,96 @@
 import type React from "react"
 
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useToast } from "@/components/ui/use-toast"
-import { User, LogIn } from "lucide-react"
+import { User, Loader2 } from "lucide-react"
 
 interface UsernameModalProps {
-  onComplete: (username: string) => void
+  isOpen: boolean
+  onSubmit: (username: string) => void
+  isLoading?: boolean
 }
 
-export default function UsernameModal({ onComplete }: UsernameModalProps) {
+export default function UsernameModal({ isOpen, onSubmit, isLoading = false }: UsernameModalProps) {
   const [username, setUsername] = useState("")
   const [error, setError] = useState("")
-  const { toast } = useToast()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!username.trim()) {
-      setError("İsim alanı boş bırakılamaz.")
+    const trimmedUsername = username.trim()
+
+    if (!trimmedUsername) {
+      setError("Lütfen adınızı girin")
       return
     }
 
-    // Store username in localStorage
-    localStorage.setItem("username", username.trim())
+    if (trimmedUsername.length < 2) {
+      setError("Ad en az 2 karakter olmalıdır")
+      return
+    }
 
-    // Notify parent component
-    onComplete(username.trim())
+    if (trimmedUsername.length > 50) {
+      setError("Ad en fazla 50 karakter olabilir")
+      return
+    }
 
-    toast({
-      title: "Hoş Geldiniz",
-      description: `Merhaba, ${username.trim()}! Sisteme başarıyla giriş yaptınız.`,
-    })
+    setError("")
+    onSubmit(trimmedUsername)
+  }
+
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUsername(e.target.value)
+    if (error) {
+      setError("")
+    }
   }
 
   return (
-    <Dialog open={true}>
-      <DialogContent className="sm:max-w-md shadow-xl border-2 animate-fadeIn">
-        <DialogHeader className="text-center pb-2">
-          <div className="mx-auto bg-primary/10 p-3 rounded-full mb-4">
-            <User className="h-6 w-6 text-primary" />
+    <Dialog open={isOpen} onOpenChange={() => {}}>
+      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogHeader className="text-center">
+          <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+            <User className="h-8 w-8 text-primary-foreground" />
           </div>
-          <DialogTitle className="text-xl">Kullanıcı Bilgisi</DialogTitle>
+          <DialogTitle className="text-xl">Hoş Geldiniz!</DialogTitle>
+          <DialogDescription>İşlem geçmişinde görünmesi için adınızı girin</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="username" className="font-medium flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5" />
-                İsminizi giriniz:
-              </Label>
-              <Input
-                id="username"
-                value={username}
-                onChange={(e) => {
-                  setUsername(e.target.value)
-                  setError("")
-                }}
-                placeholder="Adınız ve soyadınız"
-                autoComplete="name"
-                className="transition-colors duration-200"
-              />
-              {error && (
-                <div className="bg-destructive/10 text-destructive text-sm p-2 rounded-md border border-destructive/20">
-                  {error}
-                </div>
-              )}
-            </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="username" className="text-sm font-medium">
+              Adınız
+            </Label>
+            <Input
+              id="username"
+              type="text"
+              placeholder="Örn: Ahmet Yılmaz"
+              value={username}
+              onChange={handleUsernameChange}
+              className="w-full"
+              maxLength={50}
+              disabled={isLoading}
+              autoFocus
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
-          <DialogFooter>
-            <Button type="submit" className="w-full transition-colors duration-200 bg-primary flex items-center gap-2">
-              <LogIn className="h-4 w-4" />
-              Devam Et
-            </Button>
-          </DialogFooter>
+
+          <Button type="submit" className="w-full" disabled={isLoading || !username.trim()}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Giriş Yapılıyor...
+              </>
+            ) : (
+              "Sisteme Giriş Yap"
+            )}
+          </Button>
         </form>
+
+        <div className="text-xs text-muted-foreground text-center mt-4">Bu isim tüm işlemlerinizde görünecektir</div>
       </DialogContent>
     </Dialog>
   )

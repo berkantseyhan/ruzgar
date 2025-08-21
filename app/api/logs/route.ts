@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getTransactionLogs } from "@/lib/redis"
+import { getTransactionLogs } from "@/lib/database"
 
 export async function GET() {
   try {
@@ -9,7 +9,7 @@ export async function GET() {
     console.error("Error fetching transaction logs:", error)
     return NextResponse.json(
       {
-        error: "Failed to fetch transaction logs",
+        error: "İşlem geçmişi yüklenirken hata oluştu",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },

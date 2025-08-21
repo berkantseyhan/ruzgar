@@ -1,10 +1,10 @@
 import { createServerClient } from "./supabase"
 import type { DepoRuzgarProduct } from "./supabase"
 
-// Legacy types for compatibility
+// Types
 export type ShelfId = string
 export type Layer = string
-export type ActionType = "Ekleme" | "Güncelleme" | "Silme"
+export type ActionType = "Ekleme" | "Güncelleme" | "Silme" | "Giriş" | "Çıkış" | "Layout Değişikliği"
 
 export interface Product {
   id: string
@@ -24,110 +24,90 @@ export interface FieldChange {
   newValue: string | number
 }
 
-// Mock data fallback
-const mockProducts: Product[] = [
-  {
-    id: "1",
-    urunAdi: "M8 Cıvata",
-    kategori: "Bağlantı Elemanları",
-    olcu: "8mm x 20mm",
-    rafNo: "A",
-    katman: "üst kat",
-    kilogram: 0.5,
-    notlar: "Paslanmaz çelik",
-    createdAt: Date.now() - 86400000,
-  },
-  {
-    id: "2",
-    urunAdi: "Rüzgar Türbini Kanadı",
-    kategori: "Ana Parçalar",
-    olcu: "2.5m",
-    rafNo: "B",
-    katman: "alt kat",
-    kilogram: 150.0,
-    notlar: "Fiber cam malzeme",
-    createdAt: Date.now() - 172800000,
-  },
-  {
-    id: "3",
-    urunAdi: "Güç Kablosu",
-    kategori: "Elektrik",
-    olcu: "50m",
-    rafNo: "C",
-    katman: "orta kat",
-    kilogram: 25.0,
-    notlar: "16mm² kesit",
-    createdAt: Date.now() - 259200000,
-  },
-  {
-    id: "4",
-    urunAdi: "Hidrolik Yağ",
-    kategori: "Sıvılar",
-    olcu: "20L",
-    rafNo: "D",
-    katman: "alt kat",
-    kilogram: 18.0,
-    notlar: "ISO VG 46",
-    createdAt: Date.now() - 345600000,
-  },
-  {
-    id: "5",
-    urunAdi: "Rulman 6205",
-    kategori: "Mekanik Parçalar",
-    olcu: "25x52x15mm",
-    rafNo: "E",
-    katman: "üst kat",
-    kilogram: 0.13,
-    notlar: "SKF marka",
-    createdAt: Date.now() - 432000000,
-  },
-]
+export interface TransactionLog {
+  id: string
+  timestamp: number
+  actionType: ActionType
+  rafNo: ShelfId
+  katman: Layer
+  urunAdi: string
+  username: string
+  changes?: FieldChange[]
+  productDetails?: Partial<Product>
+  sessionInfo?: {
+    loginTime?: number
+    logoutTime?: number
+    ipAddress?: string
+    userAgent?: string
+  }
+}
 
-const mockTransactionLogs: any[] = [
-  {
-    id: "log1",
-    timestamp: Date.now() - 3600000,
-    actionType: "Ekleme",
-    rafNo: "A",
-    katman: "üst kat",
-    urunAdi: "M8 Cıvata",
-    username: "Test Kullanıcı",
-    productDetails: {
-      urunAdi: "M8 Cıvata",
-      olcu: "8mm x 20mm",
-      kilogram: 0.5,
-      rafNo: "A",
-      katman: "üst kat",
-    },
+export interface ShelfLayout {
+  id: ShelfId
+  x: number
+  y: number
+  width: number
+  height: number
+  rotation?: number // Rotation in degrees (0, 90, 180, 270)
+  isCommon?: boolean
+  customLayers?: string[]
+}
+
+export interface WarehouseLayout {
+  id: string
+  name: string
+  shelves: ShelfLayout[]
+  createdAt: number
+  updatedAt: number
+}
+
+// Constants
+const DEFAULT_LAYOUT_UUID = "00000000-0000-0000-0000-000000000002"
+
+// Validation constants
+const VALIDATION_LIMITS = {
+  kilogram: {
+    min: 0,
+    max: 99999999.99, // Database DECIMAL(10,2) limit
   },
-  {
-    id: "log2",
-    timestamp: Date.now() - 7200000,
-    actionType: "Güncelleme",
-    rafNo: "B",
-    katman: "alt kat",
-    urunAdi: "Rüzgar Türbini Kanadı",
-    username: "Test Kullanıcı",
-    changes: [
-      {
-        field: "kilogram",
-        oldValue: 140.0,
-        newValue: 150.0,
-      },
-    ],
-  },
-]
+}
+
+// Validate and sanitize kilogram value
+function validateAndSanitizeKilogram(value: any): number {
+  // Convert to number
+  const numValue = typeof value === "number" ? value : Number.parseFloat(String(value))
+
+  // Handle NaN
+  if (isNaN(numValue)) {
+    console.warn("Invalid kilogram value, defaulting to 0:", value)
+    return 0
+  }
+
+  // Clamp to valid range
+  if (numValue < VALIDATION_LIMITS.kilogram.min) {
+    console.warn("Kilogram value too small, clamping to minimum:", numValue)
+    return VALIDATION_LIMITS.kilogram.min
+  }
+
+  if (numValue > VALIDATION_LIMITS.kilogram.max) {
+    console.warn("Kilogram value too large, clamping to maximum:", numValue)
+    return VALIDATION_LIMITS.kilogram.max
+  }
+
+  // Round to 2 decimal places to match database precision
+  return Math.round(numValue * 100) / 100
+}
 
 // Convert between legacy format and Supabase format
 const toSupabaseProduct = (product: Product): Omit<DepoRuzgarProduct, "created_at" | "updated_at"> => ({
   id: product.id,
-  urun_adi: product.urunAdi,
-  kategori: product.kategori,
-  olcu: product.olcu,
-  raf_no: product.rafNo,
-  katman: product.katman,
-  kilogram: product.kilogram,
-  notlar: product.notlar,
+  urun_adi: product.urunAdi.substring(0, 255), // Ensure max length
+  kategori: product.kategori.substring(0, 100), // Ensure max length
+  olcu: product.olcu.substring(0, 100), // Ensure max length
+  raf_no: product.rafNo.substring(0, 50), // Ensure max length
+  katman: product.katman.substring(0, 100), // Ensure max length
+  kilogram: validateAndSanitizeKilogram(product.kilogram), // Validate and sanitize
+  notlar: product.notlar.substring(0, 1000), // Ensure max length
 })
 
 const fromSupabaseProduct = (product: DepoRuzgarProduct): Product => ({
@@ -137,106 +117,107 @@ const fromSupabaseProduct = (product: DepoRuzgarProduct): Product => ({
   olcu: product.olcu,
   rafNo: product.raf_no as ShelfId,
   katman: product.katman as Layer,
-  kilogram: product.kilogram,
+  kilogram: Number(product.kilogram), // Ensure it's a number
   notlar: product.notlar,
   createdAt: new Date(product.created_at).getTime(),
 })
 
-// Check if Supabase tables exist
-async function checkSupabaseTablesExist(): Promise<boolean> {
+// Check if Supabase tables exist and create them if they don't
+async function ensureSupabaseTablesExist(): Promise<void> {
   try {
     const supabase = createServerClient()
-    const { error } = await supabase
-      .from("Depo_Ruzgar_Products")
-      .select("count", { count: "exact", head: true })
-      .limit(1)
+
+    // Test connection with timeout
+    const { error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Products").select("count", { count: "exact", head: true }).limit(1),
+      new Promise<{ error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Supabase bağlantısı zaman aşımına uğradı")), 10000),
+      ),
+    ])
 
     if (error) {
-      console.log("🔄 Supabase tables don't exist, using mock data")
-      return false
+      console.error("Supabase table check error:", error)
+      throw new Error(
+        `Supabase tabloları kontrol edilemedi: ${error.message || error.code || "Bilinmeyen hata"}. Lütfen SQL script'lerini çalıştırın.`,
+      )
     }
 
-    console.log("✅ Supabase tables exist")
-    return true
+    console.log("✅ Supabase tabloları mevcut ve erişilebilir")
   } catch (error) {
-    console.log("🔄 Supabase connection failed, using mock data")
-    return false
+    console.error("Error in ensureSupabaseTablesExist:", error)
+    if (error instanceof Error) {
+      throw error
+    }
+    throw new Error("Supabase bağlantısı kurulamadı. Lütfen veritabanı ayarlarını kontrol edin.")
   }
 }
 
 // Get products by shelf and layer
 export async function getProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer): Promise<Product[]> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log(`🔄 Using mock data for shelf: ${shelfId}, layer: ${layer}`)
-    const filtered = mockProducts.filter((p) => p.rafNo === shelfId && p.katman === layer)
-    console.log(`Found ${filtered.length} mock products`)
-    return filtered
-  }
+  await ensureSupabaseTablesExist()
 
   try {
     console.log(`📊 Fetching from Supabase for shelf: ${shelfId}, layer: ${layer}`)
     const supabase = createServerClient()
-    const { data, error } = await supabase
-      .from("Depo_Ruzgar_Products")
-      .select("*")
-      .eq("raf_no", shelfId)
-      .eq("katman", layer)
-      .order("created_at", { ascending: false })
+
+    const { data, error } = await Promise.race([
+      supabase
+        .from("Depo_Ruzgar_Products")
+        .select("*")
+        .eq("raf_no", shelfId)
+        .eq("katman", layer)
+        .order("created_at", { ascending: false }),
+      new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Sorgu zaman aşımına uğradı")), 15000),
+      ),
+    ])
 
     if (error) {
-      console.log("🔄 Supabase error, falling back to mock data")
-      const filtered = mockProducts.filter((p) => p.rafNo === shelfId && p.katman === layer)
-      return filtered
+      console.error("Supabase query error:", error)
+      throw new Error(`Ürünler yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
     const products = (data || []).map(fromSupabaseProduct)
     console.log(`Found ${products.length} products from Supabase`)
     return products
   } catch (error) {
-    console.log("🔄 Error in getProductsByShelfAndLayer, using mock data")
-    const filtered = mockProducts.filter((p) => p.rafNo === shelfId && p.katman === layer)
-    return filtered
+    console.error("Error in getProductsByShelfAndLayer:", error)
+    throw error
   }
 }
 
 // Get all products
 export async function getAllProducts(): Promise<Product[]> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log("🔄 Using mock data for all products")
-    console.log(`Found ${mockProducts.length} mock products`)
-    return mockProducts
-  }
+  await ensureSupabaseTablesExist()
 
   try {
     console.log("📊 Fetching all products from Supabase")
     const supabase = createServerClient()
-    const { data, error } = await supabase
-      .from("Depo_Ruzgar_Products")
-      .select("*")
-      .order("created_at", { ascending: false })
+
+    const { data, error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Products").select("*").order("created_at", { ascending: false }),
+      new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Sorgu zaman aşımına uğradı")), 15000),
+      ),
+    ])
 
     if (error) {
-      console.log("🔄 Supabase error, falling back to mock data")
-      return mockProducts
+      console.error("Supabase query error:", error)
+      throw new Error(`Tüm ürünler yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
     const products = (data || []).map(fromSupabaseProduct)
     console.log(`Found ${products.length} products from Supabase`)
     return products
   } catch (error) {
-    console.log("🔄 Error in getAllProducts, using mock data")
-    return mockProducts
+    console.error("Error in getAllProducts:", error)
+    throw error
   }
 }
 
 // Detect changes between products
 function detectChanges(oldProduct: Product, newProduct: Product): FieldChange[] {
   const changes: FieldChange[] = []
-
   const fields: (keyof Product)[] = ["urunAdi", "kategori", "olcu", "rafNo", "katman", "kilogram", "notlar"]
 
   for (const field of fields) {
@@ -254,71 +235,52 @@ function detectChanges(oldProduct: Product, newProduct: Product): FieldChange[] 
 
 // Save product (create or update)
 export async function saveProduct(product: Product, username: string, isUpdate?: boolean): Promise<boolean> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log("🔄 Using mock data for save product")
-
-    // Find existing product in mock data
-    const existingIndex = mockProducts.findIndex((p) => p.id === product.id)
-    const existingProduct = existingIndex >= 0 ? mockProducts[existingIndex] : null
-    const shouldMarkAsUpdate = isUpdate !== undefined ? isUpdate : !!existingProduct
-
-    // Detect changes for updates
-    let changes: FieldChange[] = []
-    if (shouldMarkAsUpdate && existingProduct) {
-      changes = detectChanges(existingProduct, product)
-    }
-
-    // Update mock data
-    if (existingIndex >= 0) {
-      mockProducts[existingIndex] = { ...product, createdAt: existingProduct?.createdAt || Date.now() }
-    } else {
-      mockProducts.push({ ...product, createdAt: Date.now() })
-    }
-
-    // Log to mock transaction logs
-    if (!shouldMarkAsUpdate || changes.length > 0) {
-      mockTransactionLogs.unshift({
-        id: `log${Date.now()}`,
-        timestamp: Date.now(),
-        actionType: shouldMarkAsUpdate ? "Güncelleme" : "Ekleme",
-        rafNo: product.rafNo,
-        katman: product.katman,
-        urunAdi: product.urunAdi,
-        username: username,
-        changes: shouldMarkAsUpdate ? changes : undefined,
-        productDetails: shouldMarkAsUpdate
-          ? undefined
-          : {
-              urunAdi: product.urunAdi,
-              olcu: product.olcu,
-              kilogram: product.kilogram,
-              rafNo: product.rafNo,
-              katman: product.katman,
-            },
-      })
-    }
-
-    console.log("✅ Product saved to mock data successfully")
-    return true
-  }
+  await ensureSupabaseTablesExist()
 
   try {
     console.log(`📊 Saving product to Supabase: ${product.urunAdi}, isUpdate: ${isUpdate}`)
+
+    // Validate product data before processing
+    if (
+      !product.id ||
+      !product.urunAdi?.trim() ||
+      !product.kategori ||
+      !product.olcu?.trim() ||
+      !product.rafNo ||
+      !product.katman
+    ) {
+      throw new Error("Ürün bilgileri eksik. Tüm zorunlu alanları doldurun.")
+    }
+
+    // Validate kilogram specifically
+    const sanitizedKilogram = validateAndSanitizeKilogram(product.kilogram)
+    if (sanitizedKilogram !== product.kilogram) {
+      console.warn(`Kilogram value sanitized: ${product.kilogram} -> ${sanitizedKilogram}`)
+    }
+
+    // Create sanitized product
+    const sanitizedProduct = {
+      ...product,
+      kilogram: sanitizedKilogram,
+      urunAdi: product.urunAdi.trim(),
+      olcu: product.olcu.trim(),
+      notlar: product.notlar.trim(),
+    }
+
     const supabase = createServerClient()
 
     // Check if product exists
-    const { data: existingData, error: selectError } = await supabase
-      .from("Depo_Ruzgar_Products")
-      .select("*")
-      .eq("id", product.id)
-      .single()
+    const { data: existingData, error: selectError } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Products").select("*").eq("id", sanitizedProduct.id).single(),
+      new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Sorgu zaman aşımına uğradı")), 10000),
+      ),
+    ])
 
     if (selectError && selectError.code !== "PGRST116") {
       // PGRST116 is "not found" which is expected for new products
-      console.log("🔄 Supabase select error, falling back to mock data:", selectError)
-      return await saveProduct(product, username, isUpdate) // Retry with mock data
+      console.error("Product check error:", selectError)
+      throw new Error(`Ürün kontrol edilirken hata: ${selectError.message || selectError.code || "Bilinmeyen hata"}`)
     }
 
     const existingProduct = existingData ? fromSupabaseProduct(existingData) : null
@@ -327,43 +289,52 @@ export async function saveProduct(product: Product, username: string, isUpdate?:
     // Detect changes for updates
     let changes: FieldChange[] = []
     if (shouldMarkAsUpdate && existingProduct) {
-      changes = detectChanges(existingProduct, product)
-    }
-
-    // Validate product data before saving
-    if (!product.id || !product.urunAdi || !product.kategori || !product.olcu || !product.rafNo || !product.katman) {
-      console.log("🔄 Invalid product data, using mock data instead")
-      return await saveProduct(product, username, isUpdate) // Retry with mock data
+      changes = detectChanges(existingProduct, sanitizedProduct)
     }
 
     // Save product
-    const productData = toSupabaseProduct(product)
+    const productData = toSupabaseProduct(sanitizedProduct)
     console.log("📊 Saving product data:", productData)
 
-    const { error: upsertError } = await supabase.from("Depo_Ruzgar_Products").upsert(productData)
+    const { error: upsertError } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Products").upsert(productData),
+      new Promise<{ error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Kaydetme işlemi zaman aşımına uğradı")), 15000),
+      ),
+    ])
 
     if (upsertError) {
-      console.log("🔄 Supabase upsert error, falling back to mock data:", upsertError)
-      return await saveProduct(product, username, isUpdate) // Retry with mock data
+      console.error("Product save error:", upsertError)
+
+      // Provide more specific error messages
+      if (upsertError.message?.includes("numeric field overflow")) {
+        throw new Error(
+          `Kilogram değeri çok büyük. Maksimum değer: ${VALIDATION_LIMITS.kilogram.max.toLocaleString("tr-TR")} kg`,
+        )
+      } else if (upsertError.message?.includes("value too long")) {
+        throw new Error("Bir veya daha fazla alan çok uzun. Lütfen daha kısa değerler girin.")
+      } else {
+        throw new Error(`Ürün kaydedilirken hata: ${upsertError.message || upsertError.code || "Bilinmeyen hata"}`)
+      }
     }
 
     // Log transaction only if it's new or has changes
     if (!shouldMarkAsUpdate || changes.length > 0) {
       await logTransaction(
         shouldMarkAsUpdate ? "Güncelleme" : "Ekleme",
-        product.rafNo,
-        product.katman,
-        product.urunAdi,
+        sanitizedProduct.rafNo,
+        sanitizedProduct.katman,
+        sanitizedProduct.urunAdi,
         username,
         shouldMarkAsUpdate ? changes : undefined,
         shouldMarkAsUpdate
           ? undefined
           : {
-              urunAdi: product.urunAdi,
-              olcu: product.olcu,
-              kilogram: product.kilogram,
-              rafNo: product.rafNo,
-              katman: product.katman,
+              urunAdi: sanitizedProduct.urunAdi,
+              olcu: sanitizedProduct.olcu,
+              kilogram: sanitizedProduct.kilogram,
+              rafNo: sanitizedProduct.rafNo,
+              katman: sanitizedProduct.katman,
             },
       )
     }
@@ -371,91 +342,29 @@ export async function saveProduct(product: Product, username: string, isUpdate?:
     console.log("✅ Product saved to Supabase successfully")
     return true
   } catch (error) {
-    console.log("🔄 Error in saveProduct, falling back to mock data:", error)
-    // Fallback to mock data
-    const existingIndex = mockProducts.findIndex((p) => p.id === product.id)
-    const existingProduct = existingIndex >= 0 ? mockProducts[existingIndex] : null
-    const shouldMarkAsUpdate = isUpdate !== undefined ? isUpdate : !!existingProduct
-
-    if (existingIndex >= 0) {
-      mockProducts[existingIndex] = { ...product, createdAt: existingProduct?.createdAt || Date.now() }
-    } else {
-      mockProducts.push({ ...product, createdAt: Date.now() })
-    }
-
-    // Log to mock transaction logs
-    mockTransactionLogs.unshift({
-      id: `log${Date.now()}`,
-      timestamp: Date.now(),
-      actionType: shouldMarkAsUpdate ? "Güncelleme" : "Ekleme",
-      rafNo: product.rafNo,
-      katman: product.katman,
-      urunAdi: product.urunAdi,
-      username: username,
-      productDetails: {
-        urunAdi: product.urunAdi,
-        olcu: product.olcu,
-        kilogram: product.kilogram,
-        rafNo: product.rafNo,
-        katman: product.katman,
-      },
-    })
-
-    console.log("✅ Product saved to mock data as fallback")
-    return true
+    console.error("Error in saveProduct:", error)
+    throw error
   }
 }
 
 // Delete product
 export async function deleteProduct(product: Product, username: string): Promise<boolean> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log("🔄 Using mock data for delete product")
-
-    // Remove from mock data
-    const index = mockProducts.findIndex((p) => p.id === product.id)
-    if (index >= 0) {
-      mockProducts.splice(index, 1)
-
-      // Log to mock transaction logs
-      mockTransactionLogs.unshift({
-        id: `log${Date.now()}`,
-        timestamp: Date.now(),
-        actionType: "Silme",
-        rafNo: product.rafNo,
-        katman: product.katman,
-        urunAdi: product.urunAdi,
-        username: username,
-        productDetails: {
-          urunAdi: product.urunAdi,
-          olcu: product.olcu,
-          kilogram: product.kilogram,
-          rafNo: product.rafNo,
-          katman: product.katman,
-        },
-      })
-
-      console.log("✅ Product deleted from mock data successfully")
-      return true
-    }
-    return false
-  }
+  await ensureSupabaseTablesExist()
 
   try {
     console.log(`📊 Deleting product from Supabase: ${product.id}`)
     const supabase = createServerClient()
-    const { error } = await supabase.from("Depo_Ruzgar_Products").delete().eq("id", product.id)
+
+    const { error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Products").delete().eq("id", product.id),
+      new Promise<{ error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Silme işlemi zaman aşımına uğradı")), 10000),
+      ),
+    ])
 
     if (error) {
-      console.log("🔄 Supabase delete error, falling back to mock data:", error)
-      // Fallback to mock data
-      const index = mockProducts.findIndex((p) => p.id === product.id)
-      if (index >= 0) {
-        mockProducts.splice(index, 1)
-        return true
-      }
-      return false
+      console.error("Product delete error:", error)
+      throw new Error(`Ürün silinirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
     // Log transaction
@@ -470,14 +379,8 @@ export async function deleteProduct(product: Product, username: string): Promise
     console.log("✅ Product deleted from Supabase successfully")
     return true
   } catch (error) {
-    console.log("🔄 Error in deleteProduct, falling back to mock data:", error)
-    // Fallback to mock data
-    const index = mockProducts.findIndex((p) => p.id === product.id)
-    if (index >= 0) {
-      mockProducts.splice(index, 1)
-      return true
-    }
-    return false
+    console.error("Error in deleteProduct:", error)
+    throw error
   }
 }
 
@@ -490,100 +393,166 @@ export async function logTransaction(
   username = "Bilinmeyen Kullanıcı",
   changes?: FieldChange[],
   productDetails?: Partial<Product>,
+  sessionInfo?: {
+    loginTime?: number
+    logoutTime?: number
+    ipAddress?: string
+    userAgent?: string
+  },
 ): Promise<boolean> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log("🔄 Using mock data for log transaction")
-    mockTransactionLogs.unshift({
-      id: `log${Date.now()}`,
-      timestamp: Date.now(),
-      actionType: actionType,
-      rafNo: rafNo,
-      katman: katman,
-      urunAdi: urunAdi,
-      username: username,
-      changes: changes || null,
-      productDetails: productDetails || null,
-    })
-    return true
-  }
-
   try {
+    await ensureSupabaseTablesExist()
+
     console.log(`📊 Logging transaction to Supabase: ${actionType} - ${urunAdi} by ${username}`)
     const supabase = createServerClient()
-    const { error } = await supabase.from("Depo_Ruzgar_Transaction_Logs").insert({
-      action_type: actionType,
-      raf_no: rafNo,
-      katman: katman,
-      urun_adi: urunAdi,
-      username: username,
-      changes: changes || null,
-      product_details: productDetails || null,
-    })
 
-    if (error) {
-      console.log("🔄 Supabase log error, using mock data:", error)
-      mockTransactionLogs.unshift({
-        id: `log${Date.now()}`,
-        timestamp: Date.now(),
-        actionType: actionType,
-        rafNo: rafNo,
+    const { error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Transaction_Logs").insert({
+        action_type: actionType,
+        raf_no: rafNo,
         katman: katman,
-        urunAdi: urunAdi,
+        urun_adi: urunAdi,
         username: username,
         changes: changes || null,
-        productDetails: productDetails || null,
-      })
-      return true
+        product_details: productDetails || null,
+        session_info: sessionInfo || null,
+      }),
+      new Promise<{ error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Log kaydetme zaman aşımına uğradı")), 10000),
+      ),
+    ])
+
+    if (error) {
+      console.error("Transaction log error:", error)
+      // Don't throw error for logging failures, just log it
+      return false
     }
 
     return true
   } catch (error) {
-    console.log("🔄 Error in logTransaction, using mock data:", error)
-    mockTransactionLogs.unshift({
-      id: `log${Date.now()}`,
-      timestamp: Date.now(),
-      actionType: actionType,
-      rafNo: rafNo,
-      katman: katman,
-      urunAdi: urunAdi,
-      username: username,
-      changes: changes || null,
-      productDetails: productDetails || null,
-    })
+    console.error("Error in logTransaction:", error)
+    // Don't throw error for logging failures, just log it
+    return false
+  }
+}
+
+// Log user login
+export async function logUserLogin(
+  username: string,
+  sessionInfo?: {
+    ipAddress?: string
+    userAgent?: string
+  },
+): Promise<boolean> {
+  try {
+    console.log(`📊 Logging user login: ${username}`)
+
+    await logTransaction(
+      "Giriş",
+      "sistem" as ShelfId,
+      "oturum" as Layer,
+      "Kullanıcı Girişi",
+      username,
+      undefined,
+      undefined,
+      {
+        loginTime: Date.now(),
+        ...sessionInfo,
+      },
+    )
+
     return true
+  } catch (error) {
+    console.error("Error logging user login:", error)
+    return false
+  }
+}
+
+// Log user logout
+export async function logUserLogout(
+  username: string,
+  sessionInfo?: {
+    loginTime?: number
+    ipAddress?: string
+    userAgent?: string
+  },
+): Promise<boolean> {
+  try {
+    console.log(`📊 Logging user logout: ${username}`)
+
+    await logTransaction(
+      "Çıkış",
+      "sistem" as ShelfId,
+      "oturum" as Layer,
+      "Kullanıcı Çıkışı",
+      username,
+      undefined,
+      undefined,
+      {
+        logoutTime: Date.now(),
+        ...sessionInfo,
+      },
+    )
+
+    return true
+  } catch (error) {
+    console.error("Error logging user logout:", error)
+    return false
+  }
+}
+
+// Log layout changes
+export async function logLayoutChange(username: string, changeType: string, details: string): Promise<boolean> {
+  try {
+    console.log(`📊 Logging layout change: ${changeType} by ${username}`)
+
+    await logTransaction(
+      "Layout Değişikliği",
+      "sistem" as ShelfId,
+      "layout" as Layer,
+      changeType,
+      username,
+      undefined,
+      {
+        urunAdi: changeType,
+        olcu: details,
+        kilogram: 0,
+        rafNo: "sistem" as ShelfId,
+        katman: "layout" as Layer,
+      },
+    )
+
+    return true
+  } catch (error) {
+    console.error("Error logging layout change:", error)
+    return false
   }
 }
 
 // Get transaction logs
 export async function getTransactionLogs(): Promise<any[]> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log("🔄 Using mock data for transaction logs")
-    console.log(`Found ${mockTransactionLogs.length} mock transaction logs`)
-    return mockTransactionLogs
-  }
+  await ensureSupabaseTablesExist()
 
   try {
     console.log("📊 Fetching transaction logs from Supabase")
     const supabase = createServerClient()
-    const { data, error } = await supabase
-      .from("Depo_Ruzgar_Transaction_Logs")
-      .select("*")
-      .order("timestamp", { ascending: false })
-      .limit(1000)
+
+    const { data, error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Transaction_Logs").select("*").order("created_at", { ascending: false }).limit(1000),
+      new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Log sorgusu zaman aşımına uğradı")), 15000),
+      ),
+    ])
 
     if (error) {
-      console.log("🔄 Supabase error, falling back to mock data")
-      return mockTransactionLogs
+      console.error("Transaction logs query error:", error)
+      throw new Error(`İşlem geçmişi yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
     // Convert to legacy format
     const logs = (data || []).map((log) => ({
       id: log.id,
-      timestamp: new Date(log.timestamp).getTime(),
+      timestamp: new Date(log.created_at).getTime(),
       actionType: log.action_type,
       rafNo: log.raf_no,
       katman: log.katman,
@@ -591,175 +560,161 @@ export async function getTransactionLogs(): Promise<any[]> {
       username: log.username,
       changes: log.changes,
       productDetails: log.product_details,
+      sessionInfo: log.session_info,
     }))
 
     console.log(`Found ${logs.length} transaction logs from Supabase`)
     return logs
   } catch (error) {
-    console.log("🔄 Error in getTransactionLogs, using mock data")
-    return mockTransactionLogs
+    console.error("Error in getTransactionLogs:", error)
+    throw error
   }
 }
 
-// Warehouse layout functions
-export async function getWarehouseLayout(): Promise<any> {
-  const defaultLayout = {
-    id: "default",
+// Get default warehouse layout
+function getDefaultWarehouseLayout(): WarehouseLayout {
+  return {
+    id: DEFAULT_LAYOUT_UUID,
     name: "Varsayılan Layout",
     shelves: [
-      { id: "E", x: 5, y: 5, width: 25, height: 15 },
-      { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, isCommon: true },
-      { id: "G", x: 70, y: 5, width: 25, height: 15 },
-      { id: "D", x: 5, y: 25, width: 25, height: 15 },
-      { id: "F", x: 70, y: 25, width: 25, height: 15 },
-      { id: "B", x: 20, y: 45, width: 20, height: 15 },
-      { id: "C", x: 45, y: 45, width: 20, height: 15 },
-      { id: "A", x: 5, y: 55, width: 10, height: 40 },
-      { id: "orta alan", x: 20, y: 75, width: 75, height: 20, isCommon: true },
+      { id: "E", x: 5, y: 5, width: 25, height: 15, rotation: 0 },
+      { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, rotation: 0, isCommon: true },
+      { id: "G", x: 70, y: 5, width: 25, height: 15, rotation: 0 },
+      { id: "D", x: 5, y: 25, width: 25, height: 15, rotation: 0 },
+      { id: "F", x: 70, y: 25, width: 25, height: 15, rotation: 0 },
+      { id: "B", x: 20, y: 45, width: 20, height: 15, rotation: 0 },
+      { id: "C", x: 45, y: 45, width: 20, height: 15, rotation: 0 },
+      { id: "A", x: 5, y: 55, width: 10, height: 40, rotation: 0 },
+      { id: "orta alan", x: 20, y: 75, width: 75, height: 20, rotation: 0, isCommon: true },
     ],
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }
+}
 
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log("🔄 Using default layout (mock data)")
-    return defaultLayout
-  }
-
+// Warehouse layout functions
+export async function getWarehouseLayout(): Promise<WarehouseLayout | null> {
   try {
+    await ensureSupabaseTablesExist()
+
     console.log("📊 Fetching warehouse layout from Supabase")
     const supabase = createServerClient()
-    const { data, error } = await supabase
-      .from("Depo_Ruzgar_Warehouse_Layouts")
-      .select("*")
-      .eq("id", "default")
-      .single()
+
+    const { data, error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Warehouse_Layouts").select("*").eq("id", DEFAULT_LAYOUT_UUID).single(),
+      new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Layout sorgusu zaman aşımına uğradı")), 10000),
+      ),
+    ])
 
     if (error && error.code !== "PGRST116") {
-      console.log("🔄 Supabase error, using default layout")
-      return defaultLayout
+      console.error("Warehouse layout query error:", error)
+      throw new Error(`Layout yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
     if (!data) {
-      // Save default layout to Supabase
-      await saveWarehouseLayout(defaultLayout)
+      console.log("📊 No layout found, creating default layout")
+      const defaultLayout = getDefaultWarehouseLayout()
+      const saved = await saveWarehouseLayout(defaultLayout)
+      if (!saved) {
+        throw new Error("Varsayılan layout oluşturulamadı")
+      }
       return defaultLayout
     }
 
-    // Convert to legacy format
-    const layout = {
+    // Convert to legacy format and ensure rotation property exists
+    const layout: WarehouseLayout = {
       id: data.id,
       name: data.name,
-      shelves: data.shelves,
+      shelves: data.shelves.map((shelf: any) => ({
+        ...shelf,
+        rotation: shelf.rotation || 0, // Ensure rotation property exists
+      })),
       createdAt: new Date(data.created_at).getTime(),
       updatedAt: new Date(data.updated_at).getTime(),
     }
 
-    console.log("Warehouse layout fetched from Supabase successfully")
+    console.log("✅ Warehouse layout fetched from Supabase successfully")
     return layout
   } catch (error) {
-    console.log("🔄 Error in getWarehouseLayout, using default")
-    return defaultLayout
+    console.error("Error in getWarehouseLayout:", error)
+    throw error
   }
 }
 
 // Save warehouse layout
-export async function saveWarehouseLayout(layout: any): Promise<boolean> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log("🔄 Cannot save layout - Supabase tables don't exist")
-    return false
-  }
-
+export async function saveWarehouseLayout(layout: WarehouseLayout, username?: string): Promise<boolean> {
   try {
+    await ensureSupabaseTablesExist()
+
     console.log("📊 Saving warehouse layout to Supabase")
     const supabase = createServerClient()
-    const { error } = await supabase.from("Depo_Ruzgar_Warehouse_Layouts").upsert({
-      id: layout.id || "default",
-      name: layout.name,
-      shelves: layout.shelves,
-    })
+
+    const { error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Warehouse_Layouts").upsert({
+        id: layout.id || DEFAULT_LAYOUT_UUID,
+        name: layout.name,
+        shelves: layout.shelves,
+      }),
+      new Promise<{ error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Layout kaydetme zaman aşımına uğradı")), 10000),
+      ),
+    ])
 
     if (error) {
-      console.log("🔄 Supabase error in saveWarehouseLayout:", error)
-      return false
+      console.error("Warehouse layout save error:", error)
+      throw new Error(`Layout kaydedilirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
-    console.log("Warehouse layout saved to Supabase successfully")
+    // Log layout change if username is provided
+    if (username) {
+      await logLayoutChange(username, "Layout Güncellendi", `${layout.shelves.length} raf içeren layout kaydedildi`)
+    }
+
+    console.log("✅ Warehouse layout saved to Supabase successfully")
     return true
   } catch (error) {
-    console.log("🔄 Error in saveWarehouseLayout:", error)
+    console.error("Error in saveWarehouseLayout:", error)
     return false
   }
 }
 
 // Reset warehouse layout
 export async function resetWarehouseLayout(): Promise<boolean> {
-  try {
-    console.log("Resetting warehouse layout")
-
-    const defaultLayout = {
-      id: "default",
-      name: "Varsayılan Layout",
-      shelves: [
-        { id: "E", x: 5, y: 5, width: 25, height: 15 },
-        { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, isCommon: true },
-        { id: "G", x: 70, y: 5, width: 25, height: 15 },
-        { id: "D", x: 5, y: 25, width: 25, height: 15 },
-        { id: "F", x: 70, y: 25, width: 25, height: 15 },
-        { id: "B", x: 20, y: 45, width: 20, height: 15 },
-        { id: "C", x: 45, y: 45, width: 20, height: 15 },
-        { id: "A", x: 5, y: 55, width: 10, height: 40 },
-        { id: "orta alan", x: 20, y: 75, width: 75, height: 20, isCommon: true },
-      ],
-    }
-
-    return await saveWarehouseLayout(defaultLayout)
-  } catch (error) {
-    console.log("🔄 Error in resetWarehouseLayout:", error)
-    return false
-  }
+  const defaultLayout = getDefaultWarehouseLayout()
+  return await saveWarehouseLayout(defaultLayout)
 }
 
 // Get product count by shelf
 export async function getProductCountByShelf(shelfId: ShelfId): Promise<number> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    console.log(`🔄 Using mock data to count products for shelf: ${shelfId}`)
-    const count = mockProducts.filter((p) => p.rafNo === shelfId).length
-    console.log(`Found ${count} mock products in shelf ${shelfId}`)
-    return count
-  }
+  await ensureSupabaseTablesExist()
 
   try {
     console.log(`📊 Counting products in Supabase for shelf: ${shelfId}`)
     const supabase = createServerClient()
-    const { count, error } = await supabase
-      .from("Depo_Ruzgar_Products")
-      .select("*", { count: "exact", head: true })
-      .eq("raf_no", shelfId)
+
+    const { count, error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Products").select("*", { count: "exact", head: true }).eq("raf_no", shelfId),
+      new Promise<{ count: number; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Sayım sorgusu zaman aşımına uğradı")), 10000),
+      ),
+    ])
 
     if (error) {
-      console.log("🔄 Supabase error, using mock data")
-      const mockCount = mockProducts.filter((p) => p.rafNo === shelfId).length
-      return mockCount
+      console.error("Product count query error:", error)
+      throw new Error(`Ürün sayısı alınırken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
     console.log(`Found ${count || 0} products in shelf ${shelfId}`)
     return count || 0
   } catch (error) {
-    console.log("🔄 Error in getProductCountByShelf, using mock data")
-    const mockCount = mockProducts.filter((p) => p.rafNo === shelfId).length
-    return mockCount
+    console.error("Error in getProductCountByShelf:", error)
+    throw error
   }
 }
 
-// Helper functions for compatibility
-export function getAvailableLayersForShelf(shelfId: ShelfId, layout?: any): string[] {
+// Helper functions
+export function getAvailableLayersForShelf(shelfId: ShelfId, layout?: WarehouseLayout): string[] {
   console.log(`Getting available layers for shelf: ${shelfId}`)
 
   if (layout) {
@@ -784,7 +739,7 @@ export function getAvailableLayersForShelf(shelfId: ShelfId, layout?: any): stri
   return defaultLayers
 }
 
-export function generateUniqueShelfId(existingShelves: any[]): ShelfId {
+export function generateUniqueShelfId(existingShelves: ShelfLayout[]): ShelfId {
   const existingIds = existingShelves.map((shelf) => shelf.id)
 
   // Try letters first
@@ -814,25 +769,21 @@ export async function testSupabaseConnection(): Promise<{
   mode: string
   tables?: string[]
 }> {
-  const tablesExist = await checkSupabaseTablesExist()
-
-  if (!tablesExist) {
-    return {
-      success: true,
-      message: "Depo Rüzgar tabloları bulunamadı. Mock data kullanılıyor.",
-      mode: "mock",
-      tables: [],
-    }
-  }
-
   try {
+    await ensureSupabaseTablesExist()
+
     const supabase = createServerClient()
-    const { count, error } = await supabase.from("Depo_Ruzgar_Products").select("count", { count: "exact", head: true })
+    const { count, error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Products").select("count", { count: "exact", head: true }),
+      new Promise<{ count: number; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Test sorgusu zaman aşımına uğradı")), 10000),
+      ),
+    ])
 
     if (error) {
       return {
         success: false,
-        message: `Supabase bağlantı hatası: ${error.message}`,
+        message: `Supabase bağlantı hatası: ${error.message || error.code || "Bilinmeyen hata"}`,
         mode: "error",
         tables: [],
       }

@@ -1,111 +1,169 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getWarehouseLayout, saveWarehouseLayout, resetWarehouseLayout, getProductCountByShelf } from "@/lib/redis"
+import { getWarehouseLayout, saveWarehouseLayout, getProductCountByShelf } from "@/lib/database"
+import type { WarehouseLayout, ShelfId } from "@/lib/database"
+
+const DEFAULT_LAYOUT_UUID = "00000000-0000-0000-0000-000000000002"
 
 export async function GET() {
   try {
+    console.log("GET /api/layout - Fetching warehouse layout...")
+
     const layout = await getWarehouseLayout()
-    return NextResponse.json({ layout })
+
+    if (!layout) {
+      console.log("No layout found, creating default layout")
+
+      // Create default layout
+      const defaultLayout: WarehouseLayout = {
+        id: DEFAULT_LAYOUT_UUID,
+        name: "Varsayılan Layout",
+        shelves: [
+          { id: "A" as ShelfId, x: 10, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+          { id: "B" as ShelfId, x: 40, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+          { id: "C" as ShelfId, x: 70, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+        ],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+
+      // Try to save the default layout
+      try {
+        await saveWarehouseLayout(defaultLayout)
+        console.log("Default layout saved successfully")
+      } catch (saveError) {
+        console.error("Error saving default layout:", saveError)
+        // Continue with default layout even if save fails
+      }
+
+      return NextResponse.json({
+        success: true,
+        layout: defaultLayout,
+        message: "Default layout created",
+      })
+    }
+
+    console.log("Layout fetched successfully:", layout.id)
+    return NextResponse.json({
+      success: true,
+      layout,
+      message: "Layout fetched successfully",
+    })
   } catch (error) {
-    console.error("Error fetching warehouse layout:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to fetch warehouse layout",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    )
+    console.error("Error in GET /api/layout:", error)
+
+    // Return a fallback layout instead of error
+    const fallbackLayout: WarehouseLayout = {
+      id: DEFAULT_LAYOUT_UUID,
+      name: "Yedek Layout",
+      shelves: [
+        { id: "A" as ShelfId, x: 10, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+        { id: "B" as ShelfId, x: 40, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+        { id: "C" as ShelfId, x: 70, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+      ],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+
+    return NextResponse.json({
+      success: true,
+      layout: fallbackLayout,
+      message: "Fallback layout used due to database error",
+    })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
-    const { layout } = data
+    console.log("POST /api/layout - Saving warehouse layout...")
 
-    console.log("Received layout save request")
+    const body = await request.json()
+    const { layout, username } = body
 
-    if (!layout) {
-      return NextResponse.json({ error: "Layout data is required" }, { status: 400 })
+    if (!layout || !layout.id) {
+      return NextResponse.json({ success: false, error: "Invalid layout data" }, { status: 400 })
     }
 
-    if (!layout.shelves || !Array.isArray(layout.shelves)) {
-      return NextResponse.json({ error: "Invalid layout structure" }, { status: 400 })
-    }
-
-    const validatedLayout = {
+    // Ensure updatedAt is current and use proper UUID
+    const layoutToSave = {
       ...layout,
-      shelves: layout.shelves.map((shelf: any) => ({
-        id: shelf.id,
-        x: Number(shelf.x) || 0,
-        y: Number(shelf.y) || 0,
-        width: Number(shelf.width) || 15,
-        height: Number(shelf.height) || 15,
-        isCommon: Boolean(shelf.isCommon),
-        customLayers: shelf.customLayers || undefined,
-      })),
+      id: layout.id || DEFAULT_LAYOUT_UUID,
       updatedAt: Date.now(),
     }
 
-    const success = await saveWarehouseLayout(validatedLayout)
+    await saveWarehouseLayout(layoutToSave, username)
 
-    if (success) {
-      console.log("Layout saved successfully")
-      return NextResponse.json({ success: true, layout: validatedLayout })
-    } else {
-      console.error("Failed to save layout")
-      return NextResponse.json({ error: "Failed to save warehouse layout" }, { status: 500 })
-    }
+    console.log("Layout saved successfully:", layout.id)
+    return NextResponse.json({
+      success: true,
+      message: "Layout saved successfully",
+    })
   } catch (error) {
-    console.error("Error saving warehouse layout:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to save warehouse layout",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function DELETE() {
-  try {
-    const success = await resetWarehouseLayout()
-
-    if (success) {
-      return NextResponse.json({ success: true })
-    } else {
-      return NextResponse.json({ error: "Failed to reset warehouse layout" }, { status: 500 })
-    }
-  } catch (error) {
-    console.error("Error resetting warehouse layout:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to reset warehouse layout",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    )
+    console.error("Error in POST /api/layout:", error)
+    return NextResponse.json({ success: false, error: "Failed to save layout" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
-    const { action, shelfId } = await request.json()
+    console.log("PUT /api/layout - Processing special action...")
+
+    const body = await request.json()
+    const { action, shelfId } = body
 
     if (action === "checkProducts" && shelfId) {
-      const productCount = await getProductCountByShelf(shelfId)
-      return NextResponse.json({ productCount })
+      try {
+        const productCount = await getProductCountByShelf(shelfId)
+        console.log(`Product count for shelf ${shelfId}:`, productCount)
+
+        return NextResponse.json({
+          success: true,
+          productCount,
+          message: `Found ${productCount} products on shelf ${shelfId}`,
+        })
+      } catch (error) {
+        console.error("Error checking products:", error)
+        // Return 0 if we can't check products
+        return NextResponse.json({
+          success: true,
+          productCount: 0,
+          message: "Could not check products, assuming 0",
+        })
+      }
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    return NextResponse.json({ success: false, error: "Invalid action" }, { status: 400 })
   } catch (error) {
-    console.error("Error in layout PUT:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to process request",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 },
-    )
+    console.error("Error in PUT /api/layout:", error)
+    return NextResponse.json({ success: false, error: "Failed to process action" }, { status: 500 })
+  }
+}
+
+export async function DELETE() {
+  try {
+    console.log("DELETE /api/layout - Resetting to default layout...")
+
+    const defaultLayout: WarehouseLayout = {
+      id: DEFAULT_LAYOUT_UUID,
+      name: "Varsayılan Layout",
+      shelves: [
+        { id: "A" as ShelfId, x: 10, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+        { id: "B" as ShelfId, x: 40, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+        { id: "C" as ShelfId, x: 70, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
+      ],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+
+    await saveWarehouseLayout(defaultLayout)
+
+    console.log("Layout reset to default successfully")
+    return NextResponse.json({
+      success: true,
+      layout: defaultLayout,
+      message: "Layout reset to default",
+    })
+  } catch (error) {
+    console.error("Error in DELETE /api/layout:", error)
+    return NextResponse.json({ success: false, error: "Failed to reset layout" }, { status: 500 })
   }
 }

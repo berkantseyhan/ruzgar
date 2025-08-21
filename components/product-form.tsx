@@ -24,6 +24,20 @@ interface ProductFormProps {
   onCancel?: () => void
 }
 
+// Validation constants
+const VALIDATION_LIMITS = {
+  kilogram: {
+    min: 0,
+    max: 99999999.99, // Database DECIMAL(10,2) limit
+  },
+  textFields: {
+    maxLength: 255,
+  },
+  notlar: {
+    maxLength: 1000,
+  },
+}
+
 export default function ProductForm({ initialData, onSuccess, onCancel }: ProductFormProps) {
   const [availableShelves, setAvailableShelves] = useState<{ value: string; label: string }[]>([])
   const [warehouseLayout, setWarehouseLayout] = useState<WarehouseLayout | null>(null)
@@ -168,12 +182,65 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
     }
   }, [formData.rafNo, warehouseLayout])
 
+  // Validate kilogram value
+  const validateKilogram = (value: string | number): { isValid: boolean; error?: string; parsedValue?: number } => {
+    // Convert to string for parsing
+    const stringValue = String(value).trim()
+
+    // Check if empty
+    if (!stringValue) {
+      return { isValid: true, parsedValue: 0 }
+    }
+
+    // Try to parse as number
+    const parsedValue = Number.parseFloat(stringValue)
+
+    // Check if parsing failed
+    if (isNaN(parsedValue)) {
+      return { isValid: false, error: "Geçerli bir sayı giriniz" }
+    }
+
+    // Check if negative
+    if (parsedValue < VALIDATION_LIMITS.kilogram.min) {
+      return { isValid: false, error: "Kilogram 0 veya daha büyük olmalıdır" }
+    }
+
+    // Check if too large for database
+    if (parsedValue > VALIDATION_LIMITS.kilogram.max) {
+      return {
+        isValid: false,
+        error: `Kilogram değeri çok büyük (maksimum: ${VALIDATION_LIMITS.kilogram.max.toLocaleString("tr-TR")})`,
+      }
+    }
+
+    // Check decimal places (max 2)
+    const decimalPlaces = (stringValue.split(".")[1] || "").length
+    if (decimalPlaces > 2) {
+      return { isValid: false, error: "En fazla 2 ondalık basamak girebilirsiniz" }
+    }
+
+    return { isValid: true, parsedValue }
+  }
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.urunAdi.trim()) newErrors.urunAdi = "Ürün adı gereklidir"
-    if (!formData.kategori) newErrors.kategori = "Kategori gereklidir"
-    if (!formData.olcu.trim()) newErrors.olcu = "Ölçü gereklidir"
+    // Required field validations
+    if (!formData.urunAdi.trim()) {
+      newErrors.urunAdi = "Ürün adı gereklidir"
+    } else if (formData.urunAdi.length > VALIDATION_LIMITS.textFields.maxLength) {
+      newErrors.urunAdi = `Ürün adı çok uzun (maksimum: ${VALIDATION_LIMITS.textFields.maxLength} karakter)`
+    }
+
+    if (!formData.kategori) {
+      newErrors.kategori = "Kategori gereklidir"
+    }
+
+    if (!formData.olcu.trim()) {
+      newErrors.olcu = "Ölçü gereklidir"
+    } else if (formData.olcu.length > VALIDATION_LIMITS.textFields.maxLength) {
+      newErrors.olcu = `Ölçü çok uzun (maksimum: ${VALIDATION_LIMITS.textFields.maxLength} karakter)`
+    }
 
     // Only validate shelf and layer when creating a new product
     if (!initialData?.id) {
@@ -181,7 +248,16 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
       if (!formData.katman) newErrors.katman = "Katman gereklidir"
     }
 
-    if (formData.kilogram < 0) newErrors.kilogram = "Kilogram 0 veya daha büyük olmalıdır"
+    // Kilogram validation
+    const kilogramValidation = validateKilogram(formData.kilogram)
+    if (!kilogramValidation.isValid) {
+      newErrors.kilogram = kilogramValidation.error!
+    }
+
+    // Notes validation
+    if (formData.notlar.length > VALIDATION_LIMITS.notlar.maxLength) {
+      newErrors.notlar = `Notlar çok uzun (maksimum: ${VALIDATION_LIMITS.notlar.maxLength} karakter)`
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -189,10 +265,27 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === "kilogram" ? Number.parseFloat(value) || 0 : value,
-    }))
+
+    if (name === "kilogram") {
+      // For kilogram, store the raw string value for validation
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }))
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }))
+    }
+
+    // Clear error for this field when user starts typing
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }))
+    }
   }
 
   const handleSelectChange = (name: string, value: string) => {
@@ -200,12 +293,27 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
       ...prev,
       [name]: value,
     }))
+
+    // Clear error for this field
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }))
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!validateForm()) {
+      return
+    }
+
+    // Validate and parse kilogram one more time before submission
+    const kilogramValidation = validateKilogram(formData.kilogram)
+    if (!kilogramValidation.isValid) {
+      setErrors((prev) => ({ ...prev, kilogram: kilogramValidation.error! }))
       return
     }
 
@@ -221,7 +329,7 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
         // When editing, preserve the original shelf and layer values
         rafNo: initialData?.id ? (initialData.rafNo as ShelfId) : (formData.rafNo as ShelfId),
         katman: initialData?.id ? (initialData.katman as Layer) : (formData.katman as Layer),
-        kilogram: formData.kilogram,
+        kilogram: kilogramValidation.parsedValue!, // Use the validated and parsed value
         notlar: formData.notlar.trim(),
         createdAt: initialData?.createdAt || Date.now(),
       }
@@ -278,10 +386,11 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
       }
     } catch (error) {
       console.error("Form submission error:", error)
-      setSubmitError(error instanceof Error ? error.message : "Ürün kaydedilirken bir hata oluştu")
+      const errorMessage = error instanceof Error ? error.message : "Ürün kaydedilirken bir hata oluştu"
+      setSubmitError(errorMessage)
       toast({
         title: "Hata",
-        description: "Ürün kaydedilirken bir hata oluştu.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -354,6 +463,7 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
                 value={formData.urunAdi}
                 onChange={handleChange}
                 className="shadow-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                maxLength={VALIDATION_LIMITS.textFields.maxLength}
               />
               {errors.urunAdi && <p className="text-sm text-destructive mt-1">{errors.urunAdi}</p>}
             </div>
@@ -392,6 +502,7 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
                 value={formData.olcu}
                 onChange={handleChange}
                 className="shadow-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                maxLength={VALIDATION_LIMITS.textFields.maxLength}
               />
               {errors.olcu && <p className="text-sm text-destructive mt-1">{errors.olcu}</p>}
             </div>
@@ -405,6 +516,7 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
                 name="kilogram"
                 type="number"
                 min="0"
+                max={VALIDATION_LIMITS.kilogram.max}
                 step="0.01"
                 placeholder="Kilogram girin"
                 value={formData.kilogram}
@@ -412,6 +524,9 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
                 className="shadow-sm focus:ring-2 focus:ring-primary/20 transition-all"
               />
               {errors.kilogram && <p className="text-sm text-destructive mt-1">{errors.kilogram}</p>}
+              <p className="text-xs text-muted-foreground">
+                Maksimum: {VALIDATION_LIMITS.kilogram.max.toLocaleString("tr-TR")} kg
+              </p>
             </div>
 
             {!initialData?.id ? (
@@ -496,7 +611,12 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
               className="min-h-[100px] shadow-sm focus:ring-2 focus:ring-primary/20 transition-all"
               value={formData.notlar}
               onChange={handleChange}
+              maxLength={VALIDATION_LIMITS.notlar.maxLength}
             />
+            {errors.notlar && <p className="text-sm text-destructive mt-1">{errors.notlar}</p>}
+            <p className="text-xs text-muted-foreground">
+              {formData.notlar.length}/{VALIDATION_LIMITS.notlar.maxLength} karakter
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
