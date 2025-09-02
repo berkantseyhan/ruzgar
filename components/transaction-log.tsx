@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Search, Download, Loader2, Filter, Calendar, Clock, User, Edit, LogIn, LogOut } from "lucide-react"
-import type { TransactionLog } from "@/lib/redis"
+import type { TransactionLog } from "@/lib/types"
 import { useToast } from "@/components/ui/use-toast"
 import { convertHeadersForCSV } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"

@@ -1,6 +1,6 @@
 "use client"
 
-import type { ShelfId } from "@/lib/redis"
+import type { ShelfId } from "@/lib/types"
 
 interface ShelfBlockProps {
   id: ShelfId
