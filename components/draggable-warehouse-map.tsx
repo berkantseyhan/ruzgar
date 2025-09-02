@@ -3,7 +3,6 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import type { ShelfId, ShelfLayout, WarehouseLayout } from "@/lib/database"
-import { generateUniqueShelfId } from "@/lib/database"
 import ShelfModal from "@/components/shelf-modal"
 import ShelfLayersEditor from "@/components/shelf-layers-editor"
 import ConfirmDialog from "@/components/confirm-dialog"
@@ -257,7 +256,9 @@ function DraggableShelf({
           </button>
         </div>
       ) : (
-        <span className="select-none px-1 text-center break-words">{shelf.id}</span>
+        <span className="select-none px-1 text-center break-words">
+          {shelf.name && shelf.name.trim() !== "" ? shelf.name : shelf.id.length > 10 ? "Raf" : shelf.id}
+        </span>
       )}
 
       {isEditMode && !isEditingName && (
@@ -339,6 +340,7 @@ function validateAndNormalizeLayout(data: any): WarehouseLayout {
       rotation: typeof shelf.rotation === "number" ? shelf.rotation : 0,
       isCommon: Boolean(shelf.isCommon),
       customLayers: Array.isArray(shelf.customLayers) ? shelf.customLayers : undefined,
+      name: shelf.name || shelf.id, // Added shelf.name fallback
     }))
   } else if (layout.shelves && typeof layout.shelves === "object") {
     // If shelves is an object, convert to array
@@ -355,6 +357,7 @@ function validateAndNormalizeLayout(data: any): WarehouseLayout {
         rotation: typeof shelf.rotation === "number" ? shelf.rotation : 0,
         isCommon: Boolean(shelf.isCommon),
         customLayers: Array.isArray(shelf.customLayers) ? shelf.customLayers : undefined,
+        name: shelf.name || shelf.id, // Added shelf.name fallback
       }
     })
   } else {
@@ -381,9 +384,9 @@ function getDefaultLayout(): WarehouseLayout {
     id: "default",
     name: "Varsayılan Layout",
     shelves: [
-      { id: "A", x: 10, y: 10, width: 20, height: 15, rotation: 0, isCommon: false },
-      { id: "B", x: 40, y: 10, width: 20, height: 15, rotation: 0, isCommon: false },
-      { id: "C", x: 70, y: 10, width: 20, height: 15, rotation: 0, isCommon: false },
+      { id: "A", x: 10, y: 10, width: 20, height: 15, rotation: 0, isCommon: false, name: "A Rafı" },
+      { id: "B", x: 40, y: 10, width: 20, height: 15, rotation: 0, isCommon: false, name: "B Rafı" },
+      { id: "C", x: 70, y: 10, width: 20, height: 15, rotation: 0, isCommon: false, name: "C Rafı" },
     ],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -646,27 +649,49 @@ export default function DraggableWarehouseMap() {
   }
 
   const handleAddShelf = () => {
-    const newShelfId = generateUniqueShelfId(layout?.shelves || [])
-    if (!newShelfId) {
+    const shelfName = prompt("Yeni raf için isim girin:")
+
+    // If user cancels the prompt, don't create the shelf
+    if (shelfName === null) {
+      return
+    }
+
+    // If user enters empty name, show error
+    if (!shelfName.trim()) {
       toast({
         title: "Hata",
-        description: "Maksimum raf sayısına ulaşıldı (A-Z).",
+        description: "Raf ismi boş olamaz.",
         variant: "destructive",
       })
       return
     }
 
-    console.log("➕ Adding new shelf:", newShelfId)
+    const finalShelfName = shelfName.trim()
+
+    const existingShelf = layout?.shelves.find((shelf) => shelf.name === finalShelfName || shelf.id === finalShelfName)
+
+    if (existingShelf) {
+      toast({
+        title: "Hata",
+        description: "Bu isimde bir raf zaten mevcut.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const uniqueId = `shelf-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+    console.log("➕ Adding new shelf with custom name:", finalShelfName)
 
     const newShelf: ShelfLayout = {
-      id: newShelfId,
+      id: uniqueId, // Unique technical ID
       x: 10,
       y: 10,
       width: 80,
       height: 60,
       rotation: 0,
       isCommon: false,
-      name: `${newShelfId} Rafı`,
+      name: finalShelfName, // User's custom name for display
     }
 
     setLayout((prevLayout) => {
@@ -685,7 +710,7 @@ export default function DraggableWarehouseMap() {
 
     toast({
       title: "Başarılı",
-      description: `${newShelfId} rafı eklendi.`,
+      description: `"${finalShelfName}" rafı eklendi.`,
     })
   }
 

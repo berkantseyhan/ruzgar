@@ -12,6 +12,7 @@ import ProductForm from "@/components/product-form"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
 import { Badge } from "@/components/ui/badge"
+import { useWarehouse } from "@/lib/warehouse-context"
 
 interface ShelfModalProps {
   shelfId: ShelfId
@@ -89,23 +90,29 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   const [isAddingProduct, setIsAddingProduct] = useState(false)
   const { toast } = useToast()
   const { username } = useAuth()
+  const { currentWarehouse } = useWarehouse()
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // Fetch warehouse layout and set up available layers
   useEffect(() => {
     const fetchLayout = async () => {
+      if (!currentWarehouse) {
+        console.log("No current warehouse selected, skipping layout fetch")
+        return
+      }
+
       try {
-        console.log(`Fetching layout for shelf: ${shelfId}`)
-        const response = await fetch("/api/layout", {
+        console.log(`Fetching layout for shelf: ${shelfId} in warehouse: ${currentWarehouse.name}`)
+        const response = await fetch(`/api/layout?warehouse_id=${currentWarehouse.id}&t=${Date.now()}`, {
           method: "GET",
           headers: {
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             Pragma: "no-cache",
+            Expires: "0",
           },
         })
 
         if (response.ok) {
-          // Check if response is JSON
           const contentType = response.headers.get("content-type")
           if (!contentType || !contentType.includes("application/json")) {
             const textResponse = await response.text()
@@ -116,14 +123,12 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
           const data = await response.json()
           console.log("Raw layout data received in shelf modal:", data)
 
-          // Validate and normalize the layout data
           const layout = validateAndNormalizeLayout(data)
 
           if (layout && Array.isArray(layout.shelves)) {
             console.log("Validated layout:", layout)
             setWarehouseLayout(layout)
 
-            // Get available layers for this shelf
             const layers = getAvailableLayersForShelf(shelfId, layout)
             console.log(`Available layers for ${shelfId}:`, layers)
 
@@ -135,7 +140,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
             setAvailableLayers(layerOptions)
             console.log("Layer options set:", layerOptions)
 
-            // Set the first available layer as active, but preserve current if valid
             if (layerOptions.length > 0) {
               const currentLayerValid = layerOptions.some((layer) => layer.value === activeLayer)
               if (!currentLayerValid) {
@@ -147,7 +151,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
             }
           } else {
             console.error("Failed to validate layout, using fallback")
-            // Fallback to default layers
             const defaultLayers = getDefaultLayers(shelfId)
             setAvailableLayers(defaultLayers)
             if (defaultLayers.length > 0 && !defaultLayers.some((layer) => layer.value === activeLayer)) {
@@ -156,7 +159,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
           }
         } else {
           console.error("Failed to fetch layout, using fallback")
-          // Fallback to default layers
           const defaultLayers = getDefaultLayers(shelfId)
           setAvailableLayers(defaultLayers)
           if (defaultLayers.length > 0 && !defaultLayers.some((layer) => layer.value === activeLayer)) {
@@ -165,7 +167,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
         }
       } catch (error) {
         console.error("Error fetching layout:", error)
-        // Fallback to default layers
         const defaultLayers = getDefaultLayers(shelfId)
         setAvailableLayers(defaultLayers)
         if (defaultLayers.length > 0 && !defaultLayers.some((layer) => layer.value === activeLayer)) {
@@ -175,7 +176,7 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
     }
 
     fetchLayout()
-  }, [shelfId, refreshTrigger])
+  }, [shelfId, refreshTrigger, currentWarehouse])
 
   // Get default layers based on shelf type (fallback)
   const getDefaultLayers = (shelfId: ShelfId): { value: Layer; label: string }[] => {
@@ -204,11 +205,18 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   }
 
   const fetchProducts = async () => {
+    if (!currentWarehouse) {
+      console.log("No current warehouse selected, skipping products fetch")
+      setProducts([])
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
       const encodedLayer = encodeURIComponent(activeLayer)
-      const url = `/api/products?shelfId=${shelfId}&layer=${encodedLayer}`
+      const url = `/api/products?shelfId=${shelfId}&layer=${encodedLayer}&warehouse_id=${currentWarehouse.id}`
       console.log(`Fetching products from: ${url}`)
 
       const response = await fetch(url, {
@@ -222,7 +230,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
       console.log(`Response status: ${response.status}`)
       console.log(`Response content-type: ${response.headers.get("content-type")}`)
 
-      // Check if response is JSON
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
         const textResponse = await response.text()
@@ -259,10 +266,10 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   }
 
   useEffect(() => {
-    if (activeLayer) {
+    if (activeLayer && currentWarehouse) {
       fetchProducts()
     }
-  }, [shelfId, activeLayer])
+  }, [shelfId, activeLayer, currentWarehouse])
 
   const handleDeleteProduct = async (product: Product) => {
     try {
@@ -277,7 +284,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
         }),
       })
 
-      // Check if response is JSON
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
         const textResponse = await response.text()
@@ -319,7 +325,7 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   const handleFormSuccess = () => {
     setEditingProduct(null)
     setIsAddingProduct(false)
-    fetchProducts() // Refresh the product list
+    fetchProducts()
   }
 
   const getShelfColor = () => {
@@ -344,6 +350,10 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   }
 
   const renderContent = () => {
+    const currentShelf = warehouseLayout?.shelves.find((shelf) => shelf.id === shelfId)
+    const shelfDisplayName = currentShelf?.name || `${shelfId} Rafı`
+    const shelfIndicatorName = currentShelf?.name?.substring(0, 2).toUpperCase() || "R"
+
     if (editingProduct) {
       return (
         <ProductForm
@@ -371,12 +381,12 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
             <div
               className={`w-12 h-12 rounded-full ${getShelfColor()} flex items-center justify-center font-bold shadow-md`}
             >
-              {shelfId}
+              {shelfIndicatorName}
             </div>
             <div>
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <Package className="h-4 w-4 text-primary" />
-                {shelfId} Rafı
+                {shelfDisplayName}
               </h3>
               <div className="flex items-center gap-1.5 mt-1">
                 <Layers className="h-3.5 w-3.5 text-muted-foreground" />
@@ -484,7 +494,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
     )
   }
 
-  // Add this function to refresh the modal
   const refreshModal = () => {
     setRefreshTrigger((prev) => prev + 1)
     if (onRefresh) {
@@ -492,7 +501,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
     }
   }
 
-  // Make refreshModal available globally for this modal
   useEffect(() => {
     ;(window as any).refreshShelfModal = refreshModal
     return () => {
@@ -508,14 +516,16 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
             <span
               className={`w-6 h-6 rounded-full ${getShelfColor()} flex items-center justify-center text-xs font-bold`}
             >
-              {shelfId}
+              {warehouseLayout?.shelves
+                .find((shelf) => shelf.id === shelfId)
+                ?.name?.substring(0, 2)
+                .toUpperCase() || "R"}
             </span>
             Raf Detayları
           </DialogTitle>
         </DialogHeader>
 
         <Tabs value={activeLayer} onValueChange={(value) => setActiveLayer(value as Layer)}>
-          {/* Improved adaptive tab list */}
           <div className="mb-6">
             <div className="w-full bg-muted rounded-lg p-1.5 shadow-sm">
               <div className="flex flex-wrap gap-1.5 justify-center sm:justify-start">
@@ -543,7 +553,6 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
               </div>
             </div>
 
-            {/* Layer count indicator */}
             <div className="flex justify-center mt-2">
               <Badge variant="outline" className="text-xs">
                 {availableLayers.length} katman mevcut

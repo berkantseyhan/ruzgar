@@ -109,7 +109,10 @@ export async function POST(request: NextRequest) {
     console.log("POST /api/layout - Saving warehouse layout...")
 
     const body = await request.json()
-    const { layout, username, warehouseId } = body
+    const { layout, username, warehouse_id, warehouseId } = body
+    const finalWarehouseId = warehouse_id || warehouseId
+
+    console.log("POST /api/layout - Warehouse ID:", finalWarehouseId)
 
     if (!layout || !layout.id) {
       return NextResponse.json({ success: false, error: "Invalid layout data" }, { status: 400 })
@@ -120,12 +123,13 @@ export async function POST(request: NextRequest) {
       ...layout,
       id: layout.id || generateUUID(),
       updatedAt: Date.now(),
-      warehouse_id: warehouseId || layout.warehouse_id,
+      warehouse_id: finalWarehouseId,
     }
 
-    await saveWarehouseLayout(layoutToSave, username, warehouseId)
+    console.log("POST /api/layout - Saving layout for warehouse:", finalWarehouseId)
+    await saveWarehouseLayout(layoutToSave, username, finalWarehouseId)
 
-    console.log("Layout saved successfully:", layout.id)
+    console.log("Layout saved successfully for warehouse:", finalWarehouseId)
     return NextResponse.json({
       success: true,
       message: "Layout saved successfully",

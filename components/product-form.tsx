@@ -12,10 +12,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
-import { AlertCircle, Save, X, Loader2 } from "lucide-react"
+import { AlertCircle, Save, X, Loader2, RefreshCw } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
+import { useWarehouse } from "@/lib/warehouse-context"
 import { Badge } from "@/components/ui/badge"
 
 interface ProductFormProps {
@@ -46,6 +47,7 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
   const [submitError, setSubmitError] = useState<string | null>(null)
   const { toast } = useToast()
   const { username } = useAuth()
+  const { currentWarehouse } = useWarehouse()
 
   // Form state
   const [formData, setFormData] = useState({
@@ -100,51 +102,38 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
   // Get current available layers
   const availableLayers = getAvailableLayers(formData.rafNo)
 
-  // Fetch available shelves from layout
-  useEffect(() => {
-    const fetchShelves = async () => {
-      try {
-        setLoadingShelves(true)
-        const response = await fetch("/api/layout", {
-          method: "GET",
-          headers: {
-            "Cache-Control": "no-cache", // Force fresh data
-          },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          const layout: WarehouseLayout = data.layout
-          setWarehouseLayout(layout)
+  const fetchShelves = async () => {
+    try {
+      setLoadingShelves(true)
+      const warehouseParam = currentWarehouse?.id ? `?warehouse_id=${currentWarehouse.id}` : ""
+      const response = await fetch(`/api/layout${warehouseParam}`, {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache", // Force fresh data
+          Pragma: "no-cache", // Additional cache busting
+        },
+        // Add timestamp to URL to force fresh request
+        cache: "no-store",
+      })
+      if (response.ok) {
+        const data = await response.json()
+        const layout: WarehouseLayout = data.layout
+        setWarehouseLayout(layout)
 
-          const shelves = layout.shelves
-            .filter((shelf) => shelf.id && shelf.id.trim() !== "") // Filter out empty IDs
-            .map((shelf) => ({
-              value: shelf.id,
-              label: shelf.id,
-            }))
+        const shelves = layout.shelves
+          .filter((shelf) => shelf.id && shelf.id.trim() !== "") // Filter out empty IDs
+          .map((shelf) => ({
+            value: shelf.id,
+            label: shelf.name || shelf.id, // Use custom name if available, fallback to ID
+          }))
 
-          setAvailableShelves(shelves)
-          console.log(
-            "Loaded shelves:",
-            shelves.map((s) => s.label),
-          )
-        } else {
-          // Fallback to default shelves if API fails
-          setAvailableShelves([
-            { value: "A", label: "A" },
-            { value: "B", label: "B" },
-            { value: "C", label: "C" },
-            { value: "D", label: "D" },
-            { value: "E", label: "E" },
-            { value: "F", label: "F" },
-            { value: "G", label: "G" },
-            { value: "orta alan", label: "Orta Alan" },
-            { value: "çıkış yolu", label: "Çıkış Yolu" },
-          ])
-        }
-      } catch (error) {
-        console.error("Error fetching shelves:", error)
-        // Fallback to default shelves
+        setAvailableShelves(shelves)
+        console.log(
+          `[v0] Loaded shelves for warehouse ${currentWarehouse?.name || "default"}:`,
+          shelves.map((s) => s.label),
+        )
+      } else {
+        // Fallback to default shelves if API fails
         setAvailableShelves([
           { value: "A", label: "A" },
           { value: "B", label: "B" },
@@ -156,11 +145,36 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
           { value: "orta alan", label: "Orta Alan" },
           { value: "çıkış yolu", label: "Çıkış Yolu" },
         ])
-      } finally {
-        setLoadingShelves(false)
       }
+    } catch (error) {
+      console.error("Error fetching shelves:", error)
+      // Fallback to default shelves
+      setAvailableShelves([
+        { value: "A", label: "A" },
+        { value: "B", label: "B" },
+        { value: "C", label: "C" },
+        { value: "D", label: "D" },
+        { value: "E", label: "E" },
+        { value: "F", label: "F" },
+        { value: "G", label: "G" },
+        { value: "orta alan", label: "Orta Alan" },
+        { value: "çıkış yolu", label: "Çıkış Yolu" },
+      ])
+    } finally {
+      setLoadingShelves(false)
     }
+  }
 
+  const handleRefreshShelves = async () => {
+    await fetchShelves()
+    toast({
+      title: "Raflar Yenilendi",
+      description: "Raf listesi başarıyla güncellendi.",
+    })
+  }
+
+  // Fetch available shelves from layout
+  useEffect(() => {
     fetchShelves()
   }, [])
 
@@ -533,9 +547,22 @@ export default function ProductForm({ initialData, onSuccess, onCancel }: Produc
               // Only show these fields when creating a new product
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="rafNo" className="font-medium">
-                    Raf No
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="rafNo" className="font-medium">
+                      Raf No
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRefreshShelves}
+                      disabled={loadingShelves}
+                      className="h-6 px-2 text-xs"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${loadingShelves ? "animate-spin" : ""}`} />
+                      Yenile
+                    </Button>
+                  </div>
                   <Select
                     value={formData.rafNo || undefined}
                     onValueChange={(value) => handleSelectChange("rafNo", value)}

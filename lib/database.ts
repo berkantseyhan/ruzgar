@@ -71,6 +71,7 @@ export interface WarehouseLayout {
   createdAt: number
   updatedAt: number
   warehouse_id?: string
+  is_active?: boolean
 }
 
 // Constants
@@ -178,7 +179,7 @@ export async function getProductsByShelfAndLayer(
     console.log(
       `📊 Fetching from Supabase for shelf: ${shelfId}, layer: ${layer}, warehouse: ${warehouseId || "default"}`,
     )
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     let query = supabase.from("Depo_Ruzgar_Products").select("*").eq("raf_no", shelfId).eq("katman", layer)
 
@@ -212,7 +213,7 @@ export async function getAllProducts(warehouseId?: string): Promise<Product[]> {
 
   try {
     console.log(`📊 Fetching all products from Supabase for warehouse: ${warehouseId || "all"}`)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     let query = supabase.from("Depo_Ruzgar_Products").select("*")
 
@@ -551,12 +552,24 @@ export async function saveWarehouseLayout(
     console.log("📊 Saving warehouse layout to Supabase")
     const supabase = await createServerClient()
 
+    const finalWarehouseId = warehouseId || layout.warehouse_id || DEFAULT_WAREHOUSE_ID
+
+    const { error: deactivateError } = await supabase
+      .from("Depo_Ruzgar_Warehouse_Layouts")
+      .update({ is_active: false })
+      .eq("warehouse_id", finalWarehouseId)
+
+    if (deactivateError) {
+      console.error("Error deactivating existing layouts:", deactivateError)
+    }
+
     const { error } = await Promise.race([
       supabase.from("Depo_Ruzgar_Warehouse_Layouts").upsert({
         id: layout.id || DEFAULT_LAYOUT_UUID,
         name: layout.name,
         shelves: layout.shelves,
-        warehouse_id: warehouseId || layout.warehouse_id || DEFAULT_WAREHOUSE_ID,
+        warehouse_id: finalWarehouseId,
+        is_active: true, // Always mark the saved layout as active
       }),
       new Promise<{ error: any }>((_, reject) =>
         setTimeout(() => reject(new Error("Layout kaydetme zaman aşımına uğradı")), 10000),
@@ -586,9 +599,9 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
     let query = supabase.from("Depo_Ruzgar_Warehouse_Layouts").select("*")
 
     if (warehouseId) {
-      query = query.eq("warehouse_id", warehouseId)
+      query = query.eq("warehouse_id", warehouseId).eq("is_active", true)
     } else {
-      query = query.eq("id", DEFAULT_LAYOUT_UUID)
+      query = query.eq("id", DEFAULT_LAYOUT_UUID).eq("is_active", true)
     }
 
     const { data, error } = await Promise.race([
@@ -604,7 +617,7 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
     }
 
     if (!data) {
-      console.log("📊 No layout found, creating default layout")
+      console.log("📊 No active layout found, creating default layout")
       const defaultLayout = getDefaultWarehouseLayout(warehouseId)
       const saved = await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
       if (!saved) {
@@ -962,6 +975,7 @@ function getDefaultWarehouseLayout(warehouseId?: string): WarehouseLayout {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     warehouse_id: warehouseId || DEFAULT_WAREHOUSE_ID,
+    is_active: true,
   }
 }
 

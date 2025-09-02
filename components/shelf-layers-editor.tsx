@@ -89,9 +89,10 @@ export default function ShelfLayersEditor({ open, onOpenChange, shelf, onSave }:
     onSave(updatedShelf)
     onOpenChange(false)
 
+    const shelfDisplayName = shelf.name || `${shelf.id} Rafı`
     toast({
       title: "Başarılı",
-      description: `${shelf.id} rafının katmanları güncellendi.`,
+      description: `${shelfDisplayName} rafının katmanları güncellendi.`,
     })
   }
 
@@ -115,7 +116,7 @@ export default function ShelfLayersEditor({ open, onOpenChange, shelf, onSave }:
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="h-5 w-5 text-primary" />
-            {shelf.id} - Katman Düzenleyici
+            {shelf.name || `${shelf.id} Rafı`} - Katman Düzenleyici
           </DialogTitle>
         </DialogHeader>
 
