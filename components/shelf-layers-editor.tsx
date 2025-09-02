@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
 import { Plus, Trash2, Layers, Save, X } from "lucide-react"
-import type { ShelfId, ShelfLayout } from "@/lib/types"
+import type { ShelfId, ShelfLayout } from "@/lib/redis"
 
 interface ShelfLayersEditorProps {
   open: boolean
