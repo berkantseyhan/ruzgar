@@ -4,6 +4,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/lib/theme-context"
 import { AuthProvider } from "@/lib/auth-context"
+import { WarehouseProvider } from "@/lib/warehouse-context"
 import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -24,8 +25,10 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-screen bg-background text-foreground`}>
         <ThemeProvider>
           <AuthProvider>
-            {children}
-            <Toaster />
+            <WarehouseProvider>
+              {children}
+              <Toaster />
+            </WarehouseProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

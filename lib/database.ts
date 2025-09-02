@@ -4,7 +4,17 @@ import type { DepoRuzgarProduct } from "./supabase"
 // Types
 export type ShelfId = string
 export type Layer = string
-export type ActionType = "Ekleme" | "Güncelleme" | "Silme" | "Giriş" | "Çıkış" | "Layout Değişikliği"
+export type ActionType = "Ekleme" | "Güncelleme" | "Silme" | "Giriş" | "Çıkış"
+
+export interface Warehouse {
+  id: string
+  name: string
+  description?: string
+  color_code: string
+  is_active: boolean
+  created_at: number
+  updated_at: number
+}
 
 export interface Product {
   id: string
@@ -16,6 +26,7 @@ export interface Product {
   kilogram: number
   notlar: string
   createdAt: number
+  warehouse_id?: string
 }
 
 export interface FieldChange {
@@ -59,10 +70,12 @@ export interface WarehouseLayout {
   shelves: ShelfLayout[]
   createdAt: number
   updatedAt: number
+  warehouse_id?: string
 }
 
 // Constants
 const DEFAULT_LAYOUT_UUID = "00000000-0000-0000-0000-000000000002"
+const DEFAULT_WAREHOUSE_ID = "11111111-1111-1111-1111-111111111111"
 
 // Validation constants
 const VALIDATION_LIMITS = {
@@ -108,6 +121,7 @@ const toSupabaseProduct = (product: Product): Omit<DepoRuzgarProduct, "created_a
   katman: product.katman.substring(0, 100), // Ensure max length
   kilogram: validateAndSanitizeKilogram(product.kilogram), // Validate and sanitize
   notlar: product.notlar.substring(0, 1000), // Ensure max length
+  warehouse_id: product.warehouse_id || DEFAULT_WAREHOUSE_ID,
 })
 
 const fromSupabaseProduct = (product: DepoRuzgarProduct): Product => ({
@@ -120,6 +134,7 @@ const fromSupabaseProduct = (product: DepoRuzgarProduct): Product => ({
   kilogram: Number(product.kilogram), // Ensure it's a number
   notlar: product.notlar,
   createdAt: new Date(product.created_at).getTime(),
+  warehouse_id: (product as any).warehouse_id,
 })
 
 // Check if Supabase tables exist and create them if they don't
@@ -152,21 +167,27 @@ async function ensureSupabaseTablesExist(): Promise<void> {
   }
 }
 
-// Get products by shelf and layer
-export async function getProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer): Promise<Product[]> {
+export async function getProductsByShelfAndLayer(
+  shelfId: ShelfId,
+  layer: Layer,
+  warehouseId?: string,
+): Promise<Product[]> {
   await ensureSupabaseTablesExist()
 
   try {
-    console.log(`📊 Fetching from Supabase for shelf: ${shelfId}, layer: ${layer}`)
+    console.log(
+      `📊 Fetching from Supabase for shelf: ${shelfId}, layer: ${layer}, warehouse: ${warehouseId || "default"}`,
+    )
     const supabase = createServerClient()
 
+    let query = supabase.from("Depo_Ruzgar_Products").select("*").eq("raf_no", shelfId).eq("katman", layer)
+
+    if (warehouseId) {
+      query = query.eq("warehouse_id", warehouseId)
+    }
+
     const { data, error } = await Promise.race([
-      supabase
-        .from("Depo_Ruzgar_Products")
-        .select("*")
-        .eq("raf_no", shelfId)
-        .eq("katman", layer)
-        .order("created_at", { ascending: false }),
+      query.order("created_at", { ascending: false }),
       new Promise<{ data: any; error: any }>((_, reject) =>
         setTimeout(() => reject(new Error("Sorgu zaman aşımına uğradı")), 15000),
       ),
@@ -186,16 +207,21 @@ export async function getProductsByShelfAndLayer(shelfId: ShelfId, layer: Layer)
   }
 }
 
-// Get all products
-export async function getAllProducts(): Promise<Product[]> {
+export async function getAllProducts(warehouseId?: string): Promise<Product[]> {
   await ensureSupabaseTablesExist()
 
   try {
-    console.log("📊 Fetching all products from Supabase")
+    console.log(`📊 Fetching all products from Supabase for warehouse: ${warehouseId || "all"}`)
     const supabase = createServerClient()
 
+    let query = supabase.from("Depo_Ruzgar_Products").select("*")
+
+    if (warehouseId) {
+      query = query.eq("warehouse_id", warehouseId)
+    }
+
     const { data, error } = await Promise.race([
-      supabase.from("Depo_Ruzgar_Products").select("*").order("created_at", { ascending: false }),
+      query.order("created_at", { ascending: false }),
       new Promise<{ data: any; error: any }>((_, reject) =>
         setTimeout(() => reject(new Error("Sorgu zaman aşımına uğradı")), 15000),
       ),
@@ -336,6 +362,8 @@ export async function saveProduct(product: Product, username: string, isUpdate?:
               rafNo: sanitizedProduct.rafNo,
               katman: sanitizedProduct.katman,
             },
+        undefined,
+        sanitizedProduct.warehouse_id,
       )
     }
 
@@ -368,13 +396,23 @@ export async function deleteProduct(product: Product, username: string): Promise
     }
 
     // Log transaction
-    await logTransaction("Silme", product.rafNo, product.katman, product.urunAdi, username, undefined, {
-      urunAdi: product.urunAdi,
-      olcu: product.olcu,
-      kilogram: product.kilogram,
-      rafNo: product.rafNo,
-      katman: product.katman,
-    })
+    await logTransaction(
+      "Silme",
+      product.rafNo,
+      product.katman,
+      product.urunAdi,
+      username,
+      undefined,
+      {
+        urunAdi: product.urunAdi,
+        olcu: product.olcu,
+        kilogram: product.kilogram,
+        rafNo: product.rafNo,
+        katman: product.katman,
+      },
+      undefined,
+      product.warehouse_id,
+    )
 
     console.log("✅ Product deleted from Supabase successfully")
     return true
@@ -384,7 +422,6 @@ export async function deleteProduct(product: Product, username: string): Promise
   }
 }
 
-// Log transaction
 export async function logTransaction(
   actionType: ActionType,
   rafNo: ShelfId,
@@ -399,6 +436,7 @@ export async function logTransaction(
     ipAddress?: string
     userAgent?: string
   },
+  warehouseId?: string,
 ): Promise<boolean> {
   try {
     await ensureSupabaseTablesExist()
@@ -416,6 +454,7 @@ export async function logTransaction(
         changes: changes || null,
         product_details: productDetails || null,
         session_info: sessionInfo || null,
+        warehouse_id: warehouseId || DEFAULT_WAREHOUSE_ID,
       }),
       new Promise<{ error: any }>((_, reject) =>
         setTimeout(() => reject(new Error("Log kaydetme zaman aşımına uğradı")), 10000),
@@ -501,107 +540,59 @@ export async function logUserLogout(
   }
 }
 
-// Log layout changes
-export async function logLayoutChange(username: string, changeType: string, details: string): Promise<boolean> {
+export async function saveWarehouseLayout(
+  layout: WarehouseLayout,
+  username?: string,
+  warehouseId?: string,
+): Promise<boolean> {
   try {
-    console.log(`📊 Logging layout change: ${changeType} by ${username}`)
+    await ensureSupabaseTablesExist()
 
-    await logTransaction(
-      "Layout Değişikliği",
-      "sistem" as ShelfId,
-      "layout" as Layer,
-      changeType,
-      username,
-      undefined,
-      {
-        urunAdi: changeType,
-        olcu: details,
-        kilogram: 0,
-        rafNo: "sistem" as ShelfId,
-        katman: "layout" as Layer,
-      },
-    )
-
-    return true
-  } catch (error) {
-    console.error("Error logging layout change:", error)
-    return false
-  }
-}
-
-// Get transaction logs
-export async function getTransactionLogs(): Promise<any[]> {
-  await ensureSupabaseTablesExist()
-
-  try {
-    console.log("📊 Fetching transaction logs from Supabase")
+    console.log("📊 Saving warehouse layout to Supabase")
     const supabase = createServerClient()
 
-    const { data, error } = await Promise.race([
-      supabase.from("Depo_Ruzgar_Transaction_Logs").select("*").order("created_at", { ascending: false }).limit(1000),
-      new Promise<{ data: any; error: any }>((_, reject) =>
-        setTimeout(() => reject(new Error("Log sorgusu zaman aşımına uğradı")), 15000),
+    const { error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Warehouse_Layouts").upsert({
+        id: layout.id || DEFAULT_LAYOUT_UUID,
+        name: layout.name,
+        shelves: layout.shelves,
+        warehouse_id: warehouseId || layout.warehouse_id || DEFAULT_WAREHOUSE_ID,
+      }),
+      new Promise<{ error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Layout kaydetme zaman aşımına uğradı")), 10000),
       ),
     ])
 
     if (error) {
-      console.error("Transaction logs query error:", error)
-      throw new Error(`İşlem geçmişi yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
+      console.error("Warehouse layout save error:", error)
+      throw new Error(`Layout kaydedilirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
-    // Convert to legacy format
-    const logs = (data || []).map((log) => ({
-      id: log.id,
-      timestamp: new Date(log.created_at).getTime(),
-      actionType: log.action_type,
-      rafNo: log.raf_no,
-      katman: log.katman,
-      urunAdi: log.urun_adi,
-      username: log.username,
-      changes: log.changes,
-      productDetails: log.product_details,
-      sessionInfo: log.session_info,
-    }))
-
-    console.log(`Found ${logs.length} transaction logs from Supabase`)
-    return logs
+    console.log("✅ Warehouse layout saved to Supabase successfully")
+    return true
   } catch (error) {
-    console.error("Error in getTransactionLogs:", error)
-    throw error
+    console.error("Error in saveWarehouseLayout:", error)
+    return false
   }
 }
 
-// Get default warehouse layout
-function getDefaultWarehouseLayout(): WarehouseLayout {
-  return {
-    id: DEFAULT_LAYOUT_UUID,
-    name: "Varsayılan Layout",
-    shelves: [
-      { id: "E", x: 5, y: 5, width: 25, height: 15, rotation: 0 },
-      { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, rotation: 0, isCommon: true },
-      { id: "G", x: 70, y: 5, width: 25, height: 15, rotation: 0 },
-      { id: "D", x: 5, y: 25, width: 25, height: 15, rotation: 0 },
-      { id: "F", x: 70, y: 25, width: 25, height: 15, rotation: 0 },
-      { id: "B", x: 20, y: 45, width: 20, height: 15, rotation: 0 },
-      { id: "C", x: 45, y: 45, width: 20, height: 15, rotation: 0 },
-      { id: "A", x: 5, y: 55, width: 10, height: 40, rotation: 0 },
-      { id: "orta alan", x: 20, y: 75, width: 75, height: 20, rotation: 0, isCommon: true },
-    ],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }
-}
-
-// Warehouse layout functions
-export async function getWarehouseLayout(): Promise<WarehouseLayout | null> {
+export async function getWarehouseLayout(warehouseId?: string): Promise<WarehouseLayout | null> {
   try {
     await ensureSupabaseTablesExist()
 
-    console.log("📊 Fetching warehouse layout from Supabase")
+    console.log(`📊 Fetching warehouse layout from Supabase for warehouse: ${warehouseId || "default"}`)
     const supabase = createServerClient()
 
+    let query = supabase.from("Depo_Ruzgar_Warehouse_Layouts").select("*")
+
+    if (warehouseId) {
+      query = query.eq("warehouse_id", warehouseId)
+    } else {
+      query = query.eq("id", DEFAULT_LAYOUT_UUID)
+    }
+
     const { data, error } = await Promise.race([
-      supabase.from("Depo_Ruzgar_Warehouse_Layouts").select("*").eq("id", DEFAULT_LAYOUT_UUID).single(),
+      query.single(),
       new Promise<{ data: any; error: any }>((_, reject) =>
         setTimeout(() => reject(new Error("Layout sorgusu zaman aşımına uğradı")), 10000),
       ),
@@ -614,8 +605,8 @@ export async function getWarehouseLayout(): Promise<WarehouseLayout | null> {
 
     if (!data) {
       console.log("📊 No layout found, creating default layout")
-      const defaultLayout = getDefaultWarehouseLayout()
-      const saved = await saveWarehouseLayout(defaultLayout)
+      const defaultLayout = getDefaultWarehouseLayout(warehouseId)
+      const saved = await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
       if (!saved) {
         throw new Error("Varsayılan layout oluşturulamadı")
       }
@@ -632,6 +623,7 @@ export async function getWarehouseLayout(): Promise<WarehouseLayout | null> {
       })),
       createdAt: new Date(data.created_at).getTime(),
       updatedAt: new Date(data.updated_at).getTime(),
+      warehouse_id: data.warehouse_id,
     }
 
     console.log("✅ Warehouse layout fetched from Supabase successfully")
@@ -642,59 +634,27 @@ export async function getWarehouseLayout(): Promise<WarehouseLayout | null> {
   }
 }
 
-// Save warehouse layout
-export async function saveWarehouseLayout(layout: WarehouseLayout, username?: string): Promise<boolean> {
-  try {
-    await ensureSupabaseTablesExist()
-
-    console.log("📊 Saving warehouse layout to Supabase")
-    const supabase = createServerClient()
-
-    const { error } = await Promise.race([
-      supabase.from("Depo_Ruzgar_Warehouse_Layouts").upsert({
-        id: layout.id || DEFAULT_LAYOUT_UUID,
-        name: layout.name,
-        shelves: layout.shelves,
-      }),
-      new Promise<{ error: any }>((_, reject) =>
-        setTimeout(() => reject(new Error("Layout kaydetme zaman aşımına uğradı")), 10000),
-      ),
-    ])
-
-    if (error) {
-      console.error("Warehouse layout save error:", error)
-      throw new Error(`Layout kaydedilirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
-    }
-
-    // Log layout change if username is provided
-    if (username) {
-      await logLayoutChange(username, "Layout Güncellendi", `${layout.shelves.length} raf içeren layout kaydedildi`)
-    }
-
-    console.log("✅ Warehouse layout saved to Supabase successfully")
-    return true
-  } catch (error) {
-    console.error("Error in saveWarehouseLayout:", error)
-    return false
-  }
-}
-
 // Reset warehouse layout
 export async function resetWarehouseLayout(): Promise<boolean> {
   const defaultLayout = getDefaultWarehouseLayout()
   return await saveWarehouseLayout(defaultLayout)
 }
 
-// Get product count by shelf
-export async function getProductCountByShelf(shelfId: ShelfId): Promise<number> {
+export async function getProductCountByShelf(shelfId: ShelfId, warehouseId?: string): Promise<number> {
   await ensureSupabaseTablesExist()
 
   try {
-    console.log(`📊 Counting products in Supabase for shelf: ${shelfId}`)
+    console.log(`📊 Counting products in Supabase for shelf: ${shelfId}, warehouse: ${warehouseId || "default"}`)
     const supabase = createServerClient()
 
+    let query = supabase.from("Depo_Ruzgar_Products").select("*", { count: "exact", head: true }).eq("raf_no", shelfId)
+
+    if (warehouseId) {
+      query = query.eq("warehouse_id", warehouseId)
+    }
+
     const { count, error } = await Promise.race([
-      supabase.from("Depo_Ruzgar_Products").select("*", { count: "exact", head: true }).eq("raf_no", shelfId),
+      query,
       new Promise<{ count: number; error: any }>((_, reject) =>
         setTimeout(() => reject(new Error("Sayım sorgusu zaman aşımına uğradı")), 10000),
       ),
@@ -709,6 +669,55 @@ export async function getProductCountByShelf(shelfId: ShelfId): Promise<number> 
     return count || 0
   } catch (error) {
     console.error("Error in getProductCountByShelf:", error)
+    throw error
+  }
+}
+
+export async function getTransactionLogs(warehouseId?: string): Promise<TransactionLog[]> {
+  await ensureSupabaseTablesExist()
+
+  try {
+    console.log(`📊 Fetching transaction logs from Supabase for warehouse: ${warehouseId || "all"}`)
+    const supabase = createServerClient()
+
+    let query = supabase.from("Depo_Ruzgar_Transaction_Logs").select("*")
+
+    if (warehouseId) {
+      query = query.eq("warehouse_id", warehouseId)
+    }
+
+    const { data, error } = await Promise.race([
+      query
+        .order("created_at", { ascending: false })
+        .limit(1000), // Limit to last 1000 logs for performance
+      new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Log sorgusu zaman aşımına uğradı")), 15000),
+      ),
+    ])
+
+    if (error) {
+      console.error("Transaction logs query error:", error)
+      throw new Error(`İşlem geçmişi yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
+    }
+
+    // Convert Supabase format to TransactionLog format
+    const logs: TransactionLog[] = (data || []).map((log: any) => ({
+      id: log.id,
+      timestamp: new Date(log.created_at).getTime(),
+      actionType: log.action_type as ActionType,
+      rafNo: log.raf_no as ShelfId,
+      katman: log.katman as Layer,
+      urunAdi: log.urun_adi,
+      username: log.username,
+      changes: log.changes || undefined,
+      productDetails: log.product_details || undefined,
+      sessionInfo: log.session_info || undefined,
+    }))
+
+    console.log(`Found ${logs.length} transaction logs from Supabase`)
+    return logs
+  } catch (error) {
+    console.error("Error in getTransactionLogs:", error)
     throw error
   }
 }
@@ -795,6 +804,7 @@ export async function testSupabaseConnection(): Promise<{
       "Depo_Ruzgar_Transaction_Logs",
       "Depo_Ruzgar_Warehouse_Layouts",
       "Depo_Ruzgar_Auth_Passwords",
+      "Depo_Ruzgar_Warehouses",
     ]
 
     return {
@@ -810,5 +820,142 @@ export async function testSupabaseConnection(): Promise<{
       mode: "error",
       tables: [],
     }
+  }
+}
+
+export async function getWarehouses(): Promise<Warehouse[]> {
+  await ensureSupabaseTablesExist()
+
+  try {
+    console.log("📊 Fetching warehouses from Supabase")
+    const supabase = createServerClient()
+
+    const { data, error } = await Promise.race([
+      supabase
+        .from("Depo_Ruzgar_Warehouses")
+        .select("*")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true }),
+      new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Depo sorgusu zaman aşımına uğradı")), 10000),
+      ),
+    ])
+
+    if (error) {
+      console.error("Warehouses query error:", error)
+      throw new Error(`Depolar yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
+    }
+
+    const warehouses: Warehouse[] = (data || []).map((warehouse: any) => ({
+      id: warehouse.id,
+      name: warehouse.name,
+      description: warehouse.description,
+      color_code: warehouse.color_code,
+      is_active: warehouse.is_active,
+      created_at: new Date(warehouse.created_at).getTime(),
+      updated_at: new Date(warehouse.updated_at).getTime(),
+    }))
+
+    console.log(`Found ${warehouses.length} warehouses from Supabase`)
+    return warehouses
+  } catch (error) {
+    console.error("Error in getWarehouses:", error)
+    throw error
+  }
+}
+
+export async function getWarehouseById(warehouseId: string): Promise<Warehouse | null> {
+  await ensureSupabaseTablesExist()
+
+  try {
+    console.log(`📊 Fetching warehouse ${warehouseId} from Supabase`)
+    const supabase = createServerClient()
+
+    const { data, error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Warehouses").select("*").eq("id", warehouseId).single(),
+      new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Depo sorgusu zaman aşımına uğradı")), 10000),
+      ),
+    ])
+
+    if (error && error.code !== "PGRST116") {
+      console.error("Warehouse query error:", error)
+      throw new Error(`Depo yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
+    }
+
+    if (!data) {
+      return null
+    }
+
+    const warehouse: Warehouse = {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      color_code: data.color_code,
+      is_active: data.is_active,
+      created_at: new Date(data.created_at).getTime(),
+      updated_at: new Date(data.updated_at).getTime(),
+    }
+
+    console.log(`Found warehouse: ${warehouse.name}`)
+    return warehouse
+  } catch (error) {
+    console.error("Error in getWarehouseById:", error)
+    throw error
+  }
+}
+
+export async function createWarehouse(
+  warehouse: Omit<Warehouse, "id" | "created_at" | "updated_at">,
+): Promise<boolean> {
+  await ensureSupabaseTablesExist()
+
+  try {
+    console.log(`📊 Creating warehouse: ${warehouse.name}`)
+    const supabase = createServerClient()
+
+    const { error } = await Promise.race([
+      supabase.from("Depo_Ruzgar_Warehouses").insert({
+        name: warehouse.name,
+        description: warehouse.description,
+        color_code: warehouse.color_code,
+        is_active: warehouse.is_active,
+      }),
+      new Promise<{ error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Depo oluşturma zaman aşımına uğradı")), 10000),
+      ),
+    ])
+
+    if (error) {
+      console.error("Warehouse creation error:", error)
+      throw new Error(`Depo oluşturulurken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
+    }
+
+    console.log("✅ Warehouse created successfully")
+    return true
+  } catch (error) {
+    console.error("Error in createWarehouse:", error)
+    throw error
+  }
+}
+
+function getDefaultWarehouseLayout(warehouseId?: string): WarehouseLayout {
+  return {
+    id: warehouseId ? `${warehouseId}-layout` : DEFAULT_LAYOUT_UUID,
+    name: "Varsayılan Layout",
+    shelves: [
+      { id: "E", x: 5, y: 5, width: 25, height: 15, rotation: 0 },
+      { id: "çıkış yolu", x: 35, y: 5, width: 30, height: 35, rotation: 0, isCommon: true },
+      { id: "G", x: 70, y: 5, width: 25, height: 15, rotation: 0 },
+      { id: "D", x: 5, y: 25, width: 25, height: 15, rotation: 0 },
+      { id: "F", x: 70, y: 25, width: 25, height: 15, rotation: 0 },
+      { id: "B", x: 20, y: 45, width: 20, height: 15, rotation: 0 },
+      { id: "C", x: 45, y: 45, width: 20, height: 15, rotation: 0 },
+      { id: "A", x: 5, y: 55, width: 10, height: 40, rotation: 0 },
+      { id: "orta alan", x: 20, y: 75, width: 75, height: 20, rotation: 0, isCommon: true },
+    ],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    warehouse_id: warehouseId || DEFAULT_WAREHOUSE_ID,
   }
 }

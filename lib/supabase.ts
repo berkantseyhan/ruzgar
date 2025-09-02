@@ -1,13 +1,24 @@
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+if (!supabaseUrl) {
+  console.error("NEXT_PUBLIC_SUPABASE_URL is not defined in environment variables")
+}
+
+if (!supabaseAnonKey) {
+  console.error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined in environment variables")
+}
 
 // Client-side Supabase client (singleton pattern)
 let supabaseClient: ReturnType<typeof createClient> | null = null
 
 export const getSupabaseClient = () => {
   if (!supabaseClient) {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error("Supabase environment variables are not properly configured")
+    }
     supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
   }
   return supabaseClient
@@ -15,14 +26,33 @@ export const getSupabaseClient = () => {
 
 // Server-side Supabase client - FIXED EXPORT
 export const createServerClient = () => {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  if (!supabaseUrl) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not defined")
+  }
+
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
+  if (!serviceRoleKey) {
+    throw new Error("Neither SUPABASE_SERVICE_ROLE_KEY nor NEXT_PUBLIC_SUPABASE_ANON_KEY is defined")
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey)
 }
 
-// Default export for general use
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = (() => {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase configuration is incomplete. Some features may not work.")
+    // Return a mock client that will throw helpful errors
+    return {
+      from: () => ({
+        select: () => Promise.reject(new Error("Supabase is not properly configured")),
+        insert: () => Promise.reject(new Error("Supabase is not properly configured")),
+        update: () => Promise.reject(new Error("Supabase is not properly configured")),
+        delete: () => Promise.reject(new Error("Supabase is not properly configured")),
+      }),
+    } as any
+  }
+  return createClient(supabaseUrl, supabaseAnonKey)
+})()
 
 // Database table names with prefix
 export const TABLES = {
@@ -30,6 +60,7 @@ export const TABLES = {
   TRANSACTION_LOGS: "Depo_Ruzgar_Transaction_Logs",
   WAREHOUSE_LAYOUTS: "Depo_Ruzgar_Warehouse_Layouts",
   AUTH_PASSWORDS: "Depo_Ruzgar_Auth_Passwords",
+  WAREHOUSES: "Depo_Ruzgar_Warehouses",
 } as const
 
 // Database types for Depo_Ruzgar tables

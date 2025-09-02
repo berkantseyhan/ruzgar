@@ -3,7 +3,15 @@ import { logUserLogin } from "@/lib/database"
 
 export async function POST(request: NextRequest) {
   try {
-    const { username } = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (jsonError) {
+      console.error("Invalid JSON in request body:", jsonError)
+      return NextResponse.json({ error: "Geçersiz JSON formatı" }, { status: 400 })
+    }
+
+    const { username } = body
 
     if (!username || typeof username !== "string" || username.trim().length === 0) {
       return NextResponse.json({ error: "Geçerli bir kullanıcı adı gereklidir" }, { status: 400 })

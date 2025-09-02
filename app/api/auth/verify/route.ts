@@ -3,7 +3,15 @@ import { verifyPassword } from "@/lib/auth-supabase"
 
 export async function POST(request: NextRequest) {
   try {
-    const { password } = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch (jsonError) {
+      console.error("Invalid JSON in request body:", jsonError)
+      return NextResponse.json({ success: false, message: "Invalid JSON in request body" }, { status: 400 })
+    }
+
+    const { password } = body
 
     if (!password) {
       return NextResponse.json({ success: false, message: "Password is required" }, { status: 400 })

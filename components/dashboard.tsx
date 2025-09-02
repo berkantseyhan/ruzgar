@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { LogOut, Moon, Sun, Download, Loader2, History, Database, User, LayoutDashboard, Map, Plus } from "lucide-react"
 import WarehouseMap from "@/components/warehouse-map"
 import ProductForm from "@/components/product-form"
+import { WarehouseSelector } from "@/components/warehouse-selector"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { convertHeadersForCSV } from "@/lib/utils"
@@ -150,45 +151,48 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="rounded-full transition-colors duration-200"
-            >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              <span className="sr-only">Tema Değiştir</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleExportCSV}
-              disabled={isExporting}
-              className="rounded-full transition-colors duration-200"
-            >
-              {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              <span className="sr-only">CSV İndir</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/gecmis")}
-              className="rounded-full transition-colors duration-200"
-            >
-              <History className="h-4 w-4" />
-              <span className="sr-only">İşlem Geçmişi</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-              className="rounded-full transition-colors duration-200"
-            >
-              {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-              <span className="sr-only">Çıkış Yap</span>
-            </Button>
+          <div className="flex items-center gap-3">
+            <WarehouseSelector />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="rounded-full transition-colors duration-200"
+              >
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                <span className="sr-only">Tema Değiştir</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleExportCSV}
+                disabled={isExporting}
+                className="rounded-full transition-colors duration-200"
+              >
+                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                <span className="sr-only">CSV İndir</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push("/gecmis")}
+                className="rounded-full transition-colors duration-200"
+              >
+                <History className="h-4 w-4" />
+                <span className="sr-only">İşlem Geçmişi</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="rounded-full transition-colors duration-200"
+              >
+                {isLoggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+                <span className="sr-only">Çıkış Yap</span>
+              </Button>
+            </div>
           </div>
         </div>
       </header>

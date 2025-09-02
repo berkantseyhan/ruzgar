@@ -13,16 +13,19 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const shelfId = searchParams.get("shelfId") as ShelfId | null
     const layer = searchParams.get("layer") as Layer | null
+    const warehouseId = searchParams.get("warehouseId") || undefined
 
-    console.log(`🔍 API: GET request - shelfId: ${shelfId}, layer: ${layer}`)
+    console.log(`🔍 API: GET request - shelfId: ${shelfId}, layer: ${layer}, warehouseId: ${warehouseId}`)
 
     if (shelfId && layer) {
-      const products = await getProductsByShelfAndLayer(shelfId, layer)
-      console.log(`✅ API: returning ${products.length} products for ${shelfId} - ${layer}`)
+      const products = await getProductsByShelfAndLayer(shelfId, layer, warehouseId)
+      console.log(
+        `✅ API: returning ${products.length} products for ${shelfId} - ${layer} in warehouse ${warehouseId || "default"}`,
+      )
       return NextResponse.json({ products })
     } else {
-      const allProducts = await getAllProducts()
-      console.log(`✅ API: returning ${allProducts.length} total products`)
+      const allProducts = await getAllProducts(warehouseId)
+      console.log(`✅ API: returning ${allProducts.length} total products for warehouse ${warehouseId || "all"}`)
       return NextResponse.json({ products: allProducts })
     }
   } catch (error) {
@@ -40,16 +43,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
-    const { product, username, isUpdate } = data
+    const { product, username, isUpdate, warehouseId } = data
 
     console.log(
-      `🔍 API: POST request - product: ${product.urunAdi}, shelf: ${product.rafNo}, layer: ${product.katman}, username: ${username}, isUpdate: ${isUpdate}`,
+      `🔍 API: POST request - product: ${product.urunAdi}, shelf: ${product.rafNo}, layer: ${product.katman}, username: ${username}, isUpdate: ${isUpdate}, warehouseId: ${warehouseId}`,
     )
 
-    // Validate required fields
     if (!product || !product.urunAdi || !product.kategori || !product.olcu || !product.rafNo || !product.katman) {
       console.error("❌ API: Missing required product fields")
       return NextResponse.json({ error: "Gerekli ürün bilgileri eksik" }, { status: 400 })
+    }
+
+    if (warehouseId) {
+      product.warehouse_id = warehouseId
     }
 
     const success = await saveProduct(product, username || "Bilinmeyen Kullanıcı", isUpdate)

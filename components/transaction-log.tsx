@@ -5,20 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import {
-  RefreshCw,
-  Search,
-  Download,
-  Loader2,
-  Filter,
-  Calendar,
-  Clock,
-  User,
-  Edit,
-  LogIn,
-  LogOut,
-  Settings,
-} from "lucide-react"
+import { RefreshCw, Search, Download, Loader2, Filter, Calendar, Clock, User, Edit, LogIn, LogOut } from "lucide-react"
 import type { TransactionLog } from "@/lib/redis"
 import { useToast } from "@/components/ui/use-toast"
 import { convertHeadersForCSV } from "@/lib/utils"
@@ -103,8 +90,6 @@ export default function TransactionLogComponent() {
         return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300"
       case "Çıkış":
         return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
-      case "Layout Değişikliği":
-        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
     }
@@ -116,8 +101,6 @@ export default function TransactionLogComponent() {
         return <LogIn className="h-3 w-3" />
       case "Çıkış":
         return <LogOut className="h-3 w-3" />
-      case "Layout Değişikliği":
-        return <Settings className="h-3 w-3" />
       default:
         return <Edit className="h-3 w-3" />
     }
@@ -176,24 +159,6 @@ export default function TransactionLogComponent() {
             )}
           </div>
           {sessionInfo.ipAddress && <div className="text-xs text-muted-foreground">IP: {sessionInfo.ipAddress}</div>}
-        </div>
-      )
-    }
-
-    // For layout changes, show layout details
-    if (log.actionType === "Layout Değişikliği" && log.productDetails) {
-      const details = log.productDetails
-      return (
-        <div className="text-xs">
-          <Badge
-            variant="outline"
-            className="mr-1 bg-purple-50 dark:bg-purple-900 border-purple-200 dark:border-purple-800"
-          >
-            Layout İşlemi
-          </Badge>
-          <span className="font-mono bg-purple-50 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 px-1.5 py-0.5 rounded">
-            {details.olcu || "Layout değişikliği"}
-          </span>
         </div>
       )
     }
@@ -274,11 +239,6 @@ export default function TransactionLogComponent() {
         result += ` - Süre: ${duration} dk`
       }
       return result
-    }
-
-    // For layout changes
-    if (log.actionType === "Layout Değişikliği" && log.productDetails) {
-      return log.productDetails.olcu || "Layout değişikliği"
     }
 
     // For update actions, show field changes
@@ -486,16 +446,10 @@ export default function TransactionLogComponent() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {log.katman !== "oturum" && log.katman !== "layout" ? (
-                        log.katman
-                      ) : (
-                        <span className="text-muted-foreground text-sm">-</span>
-                      )}
+                      {log.katman !== "oturum" ? log.katman : <span className="text-muted-foreground text-sm">-</span>}
                     </TableCell>
                     <TableCell className="font-medium">
-                      {log.urunAdi !== "Kullanıcı Girişi" &&
-                      log.urunAdi !== "Kullanıcı Çıkışı" &&
-                      !log.urunAdi.includes("Layout") ? (
+                      {log.urunAdi !== "Kullanıcı Girişi" && log.urunAdi !== "Kullanıcı Çıkışı" ? (
                         log.urunAdi
                       ) : (
                         <span className="text-muted-foreground text-sm">-</span>

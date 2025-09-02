@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import type { ShelfId, ShelfLayout, WarehouseLayout } from "@/lib/database"
-import { generateUniqueShelfId, logLayoutChange } from "@/lib/database"
+import { generateUniqueShelfId } from "@/lib/database"
 import ShelfModal from "@/components/shelf-modal"
 import ShelfLayersEditor from "@/components/shelf-layers-editor"
 import ConfirmDialog from "@/components/confirm-dialog"
@@ -409,6 +409,7 @@ export default function DraggableWarehouseMap() {
   })
   const { toast } = useToast()
   const { username } = useAuth()
+  const [debouncedSaveTimeout, setDebouncedSaveTimeout] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     fetchLayout()
@@ -426,17 +427,43 @@ export default function DraggableWarehouseMap() {
         },
       })
 
+      console.log("📡 Response status:", response.status)
+      console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()))
+
       if (!response.ok) {
+        console.error("❌ HTTP error! status:", response.status)
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
       const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("Response is not JSON")
-      }
+      console.log("📡 Content-Type:", contentType)
 
-      const data = await response.json()
-      console.log("📦 Raw API response:", data)
+      let data
+      try {
+        const responseText = await response.text()
+        console.log("📡 Raw response text:", responseText.substring(0, 200) + "...")
+
+        if (!responseText.trim()) {
+          throw new Error("Empty response")
+        }
+
+        data = JSON.parse(responseText)
+        console.log("📦 Parsed JSON response:", data)
+      } catch (parseError) {
+        console.error("❌ JSON parsing failed:", parseError)
+        console.error("❌ Response was not valid JSON, using default layout")
+
+        // Set default layout and show warning
+        const defaultLayout = getDefaultLayout()
+        setLayout(defaultLayout)
+
+        toast({
+          title: "Uyarı",
+          description: "Sunucudan geçersiz yanıt alındı. Varsayılan layout kullanılıyor.",
+          variant: "destructive",
+        })
+        return
+      }
 
       // Validate and normalize the layout data
       const validatedLayout = validateAndNormalizeLayout(data)
@@ -460,165 +487,19 @@ export default function DraggableWarehouseMap() {
     }
   }
 
-  const handleShelfUpdate = async (updatedShelf: ShelfLayout) => {
-    if (!layout || !Array.isArray(layout.shelves)) return
-
-    const updatedShelves = layout.shelves.map((shelf) => (shelf.id === updatedShelf.id ? updatedShelf : shelf))
-
-    const updatedLayout = {
-      ...layout,
-      shelves: updatedShelves,
-      updatedAt: Date.now(),
-    }
-
-    setLayout(updatedLayout)
-
-    // Auto-save the layout when shelf is updated (moved or resized)
+  const saveLayout = async (layoutToSave: WarehouseLayout, skipLogging = false) => {
     try {
-      setSaving(true)
+      console.log("💾 Saving layout to API...")
+
       const response = await fetch("/api/layout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ layout: updatedLayout, username }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to save layout")
-      }
-
-      console.log("Layout auto-saved after shelf update")
-    } catch (error) {
-      console.error("Error auto-saving layout:", error)
-      toast({
-        title: "Uyarı",
-        description: "Raf konumu kaydedilirken bir hata oluştu.",
-        variant: "destructive",
-      })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleStartNameEdit = (shelfId: ShelfId) => {
-    setEditingShelfId(shelfId)
-    setEditingName(shelfId)
-  }
-
-  const handleNameChange = (name: string) => {
-    setEditingName(name)
-  }
-
-  const handleSaveName = async () => {
-    if (!layout || !Array.isArray(layout.shelves) || !editingShelfId || !editingName.trim()) {
-      handleCancelNameEdit()
-      return
-    }
-
-    const trimmedName = editingName.trim()
-
-    // Check if name already exists
-    const nameExists = layout.shelves.some(
-      (shelf) => shelf.id !== editingShelfId && shelf.id.toLowerCase() === trimmedName.toLowerCase(),
-    )
-
-    if (nameExists) {
-      toast({
-        title: "Hata",
-        description: "Bu isim zaten kullanılıyor. Farklı bir isim seçin.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Update shelf name
-    const updatedShelves = layout.shelves.map((shelf) =>
-      shelf.id === editingShelfId ? { ...shelf, id: trimmedName as ShelfId } : shelf,
-    )
-
-    const updatedLayout = {
-      ...layout,
-      shelves: updatedShelves,
-      updatedAt: Date.now(),
-    }
-
-    setLayout(updatedLayout)
-
-    // Auto-save the layout
-    try {
-      setSaving(true)
-      const response = await fetch("/api/layout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ layout: updatedLayout, username }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to save layout")
-      }
-
-      // Log the name change
-      if (username) {
-        await logLayoutChange(username, "Raf İsmi Değiştirildi", `"${editingShelfId}" → "${trimmedName}"`)
-      }
-
-      toast({
-        title: "İsim Güncellendi",
-        description: `Raf ismi "${editingShelfId}" → "${trimmedName}" olarak değiştirildi.`,
-      })
-    } catch (error) {
-      console.error("Error saving layout:", error)
-      toast({
-        title: "Hata",
-        description: "İsim değişikliği kaydedilirken bir hata oluştu.",
-        variant: "destructive",
-      })
-    } finally {
-      setSaving(false)
-    }
-
-    setEditingShelfId(null)
-    setEditingName("")
-  }
-
-  const handleCancelNameEdit = () => {
-    setEditingShelfId(null)
-    setEditingName("")
-  }
-
-  const handleEditLayers = (shelf: ShelfLayout) => {
-    setLayersEditorShelf(shelf)
-  }
-
-  const handleSaveLayers = async (updatedShelf: ShelfLayout) => {
-    if (!layout || !Array.isArray(layout.shelves)) return
-
-    console.log("Saving layers for shelf:", updatedShelf.id)
-    console.log("Updated shelf data:", updatedShelf)
-
-    const updatedShelves = layout.shelves.map((shelf) => (shelf.id === updatedShelf.id ? updatedShelf : shelf))
-
-    const updatedLayout = {
-      ...layout,
-      shelves: updatedShelves,
-      updatedAt: Date.now(),
-    }
-
-    console.log("Updated layout:", updatedLayout)
-    setLayout(updatedLayout)
-
-    // Auto-save the layout
-    try {
-      setSaving(true)
-      const response = await fetch("/api/layout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ layout: updatedLayout, username }),
+        body: JSON.stringify({
+          layout: layoutToSave,
+          username: username || "Bilinmeyen Kullanıcı",
+        }),
       })
 
       if (!response.ok) {
@@ -627,116 +508,15 @@ export default function DraggableWarehouseMap() {
 
       console.log("Layout saved successfully")
 
-      // Log the layer change
-      if (username) {
-        await logLayoutChange(
-          username,
-          "Raf Katmanları Güncellendi",
-          `${updatedShelf.id} rafının katmanları değiştirildi`,
-        )
+      // Log the layout change
+      if (!skipLogging && username) {
+        // Log layout change here if needed
       }
-
-      // Force refresh of any open shelf modals
-      setTimeout(() => {
-        if ((window as any).refreshShelfModal) {
-          console.log("Triggering shelf modal refresh")
-          ;(window as any).refreshShelfModal()
-        }
-      }, 100)
     } catch (error) {
       console.error("Error saving layout:", error)
       toast({
         title: "Hata",
-        description: "Katman değişiklikleri kaydedilirken bir hata oluştu.",
-        variant: "destructive",
-      })
-    } finally {
-      setSaving(false)
-    }
-
-    setLayersEditorShelf(null)
-
-    toast({
-      title: "Katmanlar Güncellendi",
-      description: `${updatedShelf.id} rafının katmanları otomatik kaydedildi.`,
-    })
-  }
-
-  const handleRotateShelf = async (shelfId: ShelfId) => {
-    if (!layout || !Array.isArray(layout.shelves)) return
-
-    const shelf = layout.shelves.find((s) => s.id === shelfId)
-    if (!shelf) return
-
-    // Rotate by 90 degrees (0 -> 90 -> 180 -> 270 -> 0)
-    const currentRotation = shelf.rotation || 0
-    const newRotation = (currentRotation + 90) % 360
-
-    const updatedShelf = { ...shelf, rotation: newRotation }
-    await handleShelfUpdate(updatedShelf)
-
-    // Log the rotation change
-    if (username) {
-      await logLayoutChange(username, "Raf Döndürüldü", `${shelfId} rafı ${newRotation}° döndürüldü`)
-    }
-
-    toast({
-      title: "Raf Döndürüldü",
-      description: `${shelfId} rafı ${newRotation}° döndürüldü.`,
-    })
-  }
-
-  const handleAddShelf = async () => {
-    if (!layout || !Array.isArray(layout.shelves)) return
-
-    const newShelfId = generateUniqueShelfId(layout.shelves)
-    const newShelf: ShelfLayout = {
-      id: newShelfId,
-      x: 10,
-      y: 10,
-      width: 15,
-      height: 15,
-      rotation: 0,
-      isCommon: false,
-    }
-
-    const updatedLayout = {
-      ...layout,
-      shelves: [...layout.shelves, newShelf],
-      updatedAt: Date.now(),
-    }
-
-    setLayout(updatedLayout)
-
-    // Automatically save the layout
-    try {
-      setSaving(true)
-      const response = await fetch("/api/layout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ layout: updatedLayout, username }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to save layout")
-      }
-
-      // Log the shelf addition
-      if (username) {
-        await logLayoutChange(username, "Yeni Raf Eklendi", `${newShelfId} rafı eklendi`)
-      }
-
-      toast({
-        title: "Yeni Raf Eklendi",
-        description: `${newShelfId} rafı eklendi ve otomatik kaydedildi.`,
-      })
-    } catch (error) {
-      console.error("Error saving layout:", error)
-      toast({
-        title: "Hata",
-        description: "Yeni raf eklenirken bir hata oluştu.",
+        description: "Layout kaydedilirken bir hata oluştu.",
         variant: "destructive",
       })
     } finally {
@@ -744,22 +524,96 @@ export default function DraggableWarehouseMap() {
     }
   }
 
-  const handleDeleteShelf = async (shelfId: ShelfId) => {
+  const handleShelfUpdate = (updatedShelf: ShelfLayout) => {
+    console.log("🔄 Shelf updated:", updatedShelf.id)
+
+    setLayout((prevLayout) => {
+      if (!prevLayout) return prevLayout
+
+      const updatedLayout = {
+        ...prevLayout,
+        shelves: prevLayout.shelves.map((shelf) => (shelf.id === updatedShelf.id ? updatedShelf : shelf)),
+        updatedAt: Date.now(),
+      }
+
+      // Clear existing timeout
+      if (debouncedSaveTimeout) {
+        clearTimeout(debouncedSaveTimeout)
+      }
+
+      // Set new timeout for debounced save
+      const newTimeout = setTimeout(() => {
+        console.log("⏰ Debounced save triggered for shelf:", updatedShelf.id)
+        saveLayout(updatedLayout, true) // Skip logging for position updates
+      }, 1000)
+
+      setDebouncedSaveTimeout(newTimeout)
+
+      return updatedLayout
+    })
+  }
+
+  const handleShelfRotate = (shelfId: ShelfId) => {
+    console.log("🔄 Rotating shelf:", shelfId)
+
+    setLayout((prevLayout) => {
+      if (!prevLayout) return prevLayout
+
+      const updatedLayout = {
+        ...prevLayout,
+        shelves: prevLayout.shelves.map((shelf) =>
+          shelf.id === shelfId ? { ...shelf, rotation: (shelf.rotation + 90) % 360 } : shelf,
+        ),
+        updatedAt: Date.now(),
+      }
+
+      // Save immediately for rotations (these are intentional actions)
+      saveLayout(updatedLayout)
+
+      return updatedLayout
+    })
+  }
+
+  const handleShelfNameChange = (shelfId: ShelfId, newName: string) => {
+    console.log("📝 Changing shelf name:", shelfId, "->", newName)
+
+    setLayout((prevLayout) => {
+      if (!prevLayout) return prevLayout
+
+      const updatedLayout = {
+        ...prevLayout,
+        shelves: prevLayout.shelves.map((shelf) => (shelf.id === shelfId ? { ...shelf, name: newName } : shelf)),
+        updatedAt: Date.now(),
+      }
+
+      // Save immediately for name changes
+      saveLayout(updatedLayout)
+
+      return updatedLayout
+    })
+  }
+
+  const handleShelfDelete = async (shelfId: ShelfId) => {
     try {
+      console.log("🗑️ Deleting shelf:", shelfId)
+
       // Check if shelf has products
-      const response = await fetch("/api/layout", {
+      const checkResponse = await fetch("/api/layout", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ action: "checkProducts", shelfId }),
+        body: JSON.stringify({
+          action: "checkProducts",
+          shelfId,
+        }),
       })
 
-      if (!response.ok) {
+      if (!checkResponse.ok) {
         throw new Error("Failed to check products")
       }
 
-      const data = await response.json()
+      const data = await checkResponse.json()
       setDeleteConfirm({
         open: true,
         shelfId,
@@ -775,103 +629,79 @@ export default function DraggableWarehouseMap() {
     }
   }
 
-  const confirmDeleteShelf = async () => {
-    if (!layout || !Array.isArray(layout.shelves) || !deleteConfirm.shelfId) return
-
-    const updatedShelves = layout.shelves.filter((shelf) => shelf.id !== deleteConfirm.shelfId)
-
-    const updatedLayout = {
-      ...layout,
-      shelves: updatedShelves,
-      updatedAt: Date.now(),
-    }
-
-    setLayout(updatedLayout)
-
-    // Auto-save the layout
-    try {
-      setSaving(true)
-      const response = await fetch("/api/layout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ layout: updatedLayout, username }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to save layout")
-      }
-
-      // Log the shelf deletion
-      if (username) {
-        await logLayoutChange(
-          username,
-          "Raf Silindi",
-          `${deleteConfirm.shelfId} rafı silindi (${deleteConfirm.productCount} ürün vardı)`,
-        )
-      }
-    } catch (error) {
-      console.error("Error saving layout after delete:", error)
-    } finally {
-      setSaving(false)
-    }
-
-    toast({
-      title: "Raf Silindi",
-      description: `${deleteConfirm.shelfId} rafı silindi.`,
-    })
-
-    if (deleteConfirm.productCount > 0) {
-      toast({
-        title: "Uyarı",
-        description: `Bu rafta ${deleteConfirm.productCount} ürün vardı. Bu ürünler artık erişilemez durumda.`,
-        variant: "destructive",
-      })
-    }
-
-    setDeleteConfirm({ open: false, shelfId: null, productCount: 0 })
-  }
-
-  const handleSaveLayout = async () => {
-    if (!layout) return
-
-    try {
-      setSaving(true)
-      const response = await fetch("/api/layout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ layout, username }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to save layout")
-      }
-
-      // Log the manual save
-      if (username) {
-        await logLayoutChange(
-          username,
-          "Layout Manuel Kaydedildi",
-          `${layout.shelves.length} raf içeren layout manuel olarak kaydedildi`,
-        )
-      }
-
-      toast({
-        title: "Başarılı",
-        description: "Depo yerleşimi kaydedildi.",
-      })
-    } catch (error) {
-      console.error("Error saving layout:", error)
+  const handleAddShelf = () => {
+    const newShelfId = generateUniqueShelfId(layout?.shelves || [])
+    if (!newShelfId) {
       toast({
         title: "Hata",
-        description: "Layout kaydedilirken bir hata oluştu.",
+        description: "Maksimum raf sayısına ulaşıldı (A-Z).",
         variant: "destructive",
       })
-    } finally {
-      setSaving(false)
+      return
+    }
+
+    console.log("➕ Adding new shelf:", newShelfId)
+
+    const newShelf: ShelfLayout = {
+      id: newShelfId,
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 60,
+      rotation: 0,
+      isCommon: false,
+      name: `${newShelfId} Rafı`,
+    }
+
+    setLayout((prevLayout) => {
+      if (!prevLayout) return prevLayout
+
+      const updatedLayout = {
+        ...prevLayout,
+        shelves: [...prevLayout.shelves, newShelf],
+        updatedAt: Date.now(),
+      }
+
+      // Save immediately for new shelves
+      saveLayout(updatedLayout)
+
+      return updatedLayout
+    })
+
+    toast({
+      title: "Başarılı",
+      description: `${newShelfId} rafı eklendi.`,
+    })
+  }
+
+  const handleSaveLayout = () => {
+    if (layout) {
+      console.log("💾 Manual save triggered")
+      saveLayout(layout)
+    }
+  }
+
+  const handleResetLayout = async () => {
+    try {
+      console.log("🔄 Resetting layout...")
+
+      const response = await fetch("/api/layout", {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to reset layout")
+      }
+
+      console.log("Layout reset successfully")
+      fetchLayout()
+    } catch (error) {
+      console.error("Error resetting layout:", error)
+      toast({
+        title: "Hata",
+        description: "Layout sıfırlanırken bir hata oluştu.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -883,6 +713,41 @@ export default function DraggableWarehouseMap() {
 
   const handleCloseModal = () => {
     setSelectedShelf(null)
+  }
+
+  const handleStartNameEdit = (shelfId: ShelfId) => {
+    setEditingShelfId(shelfId)
+    setEditingName(layout?.shelves.find((shelf) => shelf.id === shelfId)?.name || "")
+  }
+
+  const handleEditLayers = (shelf: ShelfLayout) => {
+    setLayersEditorShelf(shelf)
+  }
+
+  const handleNameChange = (name: string) => {
+    setEditingName(name)
+  }
+
+  const handleSaveName = () => {
+    if (editingShelfId && layout) {
+      const updatedShelf = { ...layout.shelves.find((shelf) => shelf.id === editingShelfId)!, name: editingName }
+      handleShelfUpdate(updatedShelf)
+      setEditingShelfId(null)
+      setEditingName("")
+    }
+  }
+
+  const handleCancelNameEdit = () => {
+    setEditingShelfId(null)
+    setEditingName("")
+  }
+
+  const handleSaveLayers = (shelf: ShelfLayout) => {
+    if (layout) {
+      const updatedShelf = { ...shelf }
+      handleShelfUpdate(updatedShelf)
+      setLayersEditorShelf(null)
+    }
   }
 
   if (loading) {
@@ -1004,12 +869,12 @@ export default function DraggableWarehouseMap() {
             key={shelf.id}
             shelf={shelf}
             isEditMode={isEditMode}
-            onUpdate={handleShelfUpdate}
-            onDelete={handleDeleteShelf}
+            onUpdate={(updatedShelf) => handleShelfUpdate(updatedShelf)}
+            onDelete={handleShelfDelete}
             onClick={handleShelfClick}
             onStartNameEdit={handleStartNameEdit}
             onEditLayers={handleEditLayers}
-            onRotate={handleRotateShelf}
+            onRotate={handleShelfRotate}
             isEditingName={editingShelfId === shelf.id}
             editingName={editingName}
             onNameChange={handleNameChange}
@@ -1032,13 +897,13 @@ export default function DraggableWarehouseMap() {
 
       {/* Delete confirmation dialog */}
       <ConfirmDialog
-        open={deleteConfirm.open}
+        open={deleteConfirm ? deleteConfirm.open : false}
         onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
         title="Rafı Sil"
         description={
-          deleteConfirm.productCount > 0
+          deleteConfirm && deleteConfirm.productCount > 0
             ? `Bu rafta ${deleteConfirm.productCount} ürün bulunuyor. Rafı silerseniz bu ürünler erişilemez hale gelecek. Devam etmek istediğinizden emin misiniz?`
-            : `${deleteConfirm.shelfId} rafını silmek istediğinizden emin misiniz?`
+            : deleteConfirm && `${deleteConfirm.shelfId} rafını silmek istediğinizden emin misiniz?`
         }
         confirmText="Sil"
         cancelText="İptal"
@@ -1068,4 +933,28 @@ export default function DraggableWarehouseMap() {
       )}
     </div>
   )
+}
+
+// Debounce function
+function debounce(func: Function, wait: number) {
+  let timeout: NodeJS.Timeout | null = null
+  return function (...args: any[]) {
+    clearTimeout(timeout!)
+    timeout = setTimeout(() => func.apply(this, args), wait)
+  }
+}
+
+function getNextAvailableShelfId(shelves: ShelfLayout[] = []): ShelfId | null {
+  const existingIds = shelves.map((shelf) => shelf.id.toUpperCase())
+  for (let i = 65; i <= 90; i++) {
+    const id = String.fromCharCode(i)
+    if (!existingIds.includes(id)) {
+      return id as ShelfId
+    }
+  }
+  return null
+}
+
+function confirmDeleteShelf() {
+  // Implementation for confirming shelf deletion
 }
