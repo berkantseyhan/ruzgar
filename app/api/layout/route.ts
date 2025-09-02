@@ -7,7 +7,7 @@ const DEFAULT_LAYOUT_UUID = "00000000-0000-0000-0000-000000000002"
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const warehouseId = searchParams.get("warehouseId") || undefined
+    const warehouseId = searchParams.get("warehouseId") || searchParams.get("warehouse_id") || undefined
 
     console.log(`GET /api/layout - Fetching warehouse layout for warehouse: ${warehouseId || "default"}`)
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
       // Create default layout
       const defaultLayout: WarehouseLayout = {
-        id: warehouseId ? `${warehouseId}-layout` : DEFAULT_LAYOUT_UUID,
+        id: generateUUID(),
         name: "Varsayılan Layout",
         shelves: [
           { id: "A" as ShelfId, x: 10, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
     // Ensure updatedAt is current and use proper UUID
     const layoutToSave = {
       ...layout,
-      id: layout.id || DEFAULT_LAYOUT_UUID,
+      id: layout.id || generateUUID(),
       updatedAt: Date.now(),
       warehouse_id: warehouseId || layout.warehouse_id,
     }
@@ -141,7 +141,8 @@ export async function PUT(request: NextRequest) {
     console.log("PUT /api/layout - Processing special action...")
 
     const body = await request.json()
-    const { action, shelfId, warehouseId } = body
+    const { action, shelfId, warehouseId: bodyWarehouseId, warehouse_id } = body
+    const warehouseId = bodyWarehouseId || warehouse_id
 
     if (action === "checkProducts" && shelfId) {
       try {
@@ -171,12 +172,15 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
-    console.log("DELETE /api/layout - Resetting to default layout...")
+    const { searchParams } = new URL(request.url)
+    const warehouseId = searchParams.get("warehouseId") || searchParams.get("warehouse_id") || undefined
+
+    console.log(`DELETE /api/layout - Resetting to default layout for warehouse: ${warehouseId || "default"}`)
 
     const defaultLayout: WarehouseLayout = {
-      id: DEFAULT_LAYOUT_UUID,
+      id: generateUUID(),
       name: "Varsayılan Layout",
       shelves: [
         { id: "A" as ShelfId, x: 10, y: 15, width: 20, height: 15, rotation: 0, isCommon: false },
@@ -185,11 +189,12 @@ export async function DELETE() {
       ],
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      warehouse_id: warehouseId,
     }
 
-    await saveWarehouseLayout(defaultLayout)
+    await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
 
-    console.log("Layout reset to default successfully")
+    console.log("Layout reset to default successfully for warehouse:", warehouseId || "default")
     return NextResponse.json({
       success: true,
       layout: defaultLayout,
@@ -199,4 +204,12 @@ export async function DELETE() {
     console.error("Error in DELETE /api/layout:", error)
     return NextResponse.json({ success: false, error: "Failed to reset layout" }, { status: 500 })
   }
+}
+
+function generateUUID(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === "x" ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
 }

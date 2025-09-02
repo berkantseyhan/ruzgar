@@ -14,6 +14,7 @@ import { Save, Lock, Unlock, Grid, Plus, Trash2, Edit3, Check, X, Layers, Rotate
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
+import { useWarehouse } from "@/lib/warehouse-context"
 
 interface DraggableWarehouseMapProps {
   onShelfClick: (shelfId: ShelfId) => void
@@ -409,18 +410,30 @@ export default function DraggableWarehouseMap() {
   })
   const { toast } = useToast()
   const { username } = useAuth()
+  const { currentWarehouse, isMigrationNeeded } = useWarehouse()
   const [debouncedSaveTimeout, setDebouncedSaveTimeout] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
-    fetchLayout()
-  }, [])
+    if (currentWarehouse && !isMigrationNeeded) {
+      fetchLayout()
+    } else if (isMigrationNeeded) {
+      setLoading(false)
+      setLayout(null)
+    }
+  }, [currentWarehouse, isMigrationNeeded])
 
   const fetchLayout = async () => {
+    if (!currentWarehouse) {
+      console.log("❌ No current warehouse selected")
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
-      console.log("🔄 Fetching layout from API...")
+      console.log("🔄 Fetching layout from API for warehouse:", currentWarehouse.id)
 
-      const response = await fetch("/api/layout", {
+      const response = await fetch(`/api/layout?warehouse_id=${currentWarehouse.id}`, {
         method: "GET",
         headers: {
           "Cache-Control": "no-cache",
@@ -453,7 +466,6 @@ export default function DraggableWarehouseMap() {
         console.error("❌ JSON parsing failed:", parseError)
         console.error("❌ Response was not valid JSON, using default layout")
 
-        // Set default layout and show warning
         const defaultLayout = getDefaultLayout()
         setLayout(defaultLayout)
 
@@ -465,7 +477,6 @@ export default function DraggableWarehouseMap() {
         return
       }
 
-      // Validate and normalize the layout data
       const validatedLayout = validateAndNormalizeLayout(data)
       console.log("✅ Setting validated layout:", validatedLayout)
 
@@ -473,7 +484,6 @@ export default function DraggableWarehouseMap() {
     } catch (error) {
       console.error("❌ Error fetching layout:", error)
 
-      // Set default layout on error
       const defaultLayout = getDefaultLayout()
       setLayout(defaultLayout)
 
@@ -488,8 +498,13 @@ export default function DraggableWarehouseMap() {
   }
 
   const saveLayout = async (layoutToSave: WarehouseLayout, skipLogging = false) => {
+    if (!currentWarehouse) {
+      console.log("❌ No current warehouse selected for saving")
+      return
+    }
+
     try {
-      console.log("💾 Saving layout to API...")
+      console.log("💾 Saving layout to API for warehouse:", currentWarehouse.id)
 
       const response = await fetch("/api/layout", {
         method: "POST",
@@ -498,6 +513,7 @@ export default function DraggableWarehouseMap() {
         },
         body: JSON.stringify({
           layout: layoutToSave,
+          warehouse_id: currentWarehouse.id,
           username: username || "Bilinmeyen Kullanıcı",
         }),
       })
@@ -506,9 +522,8 @@ export default function DraggableWarehouseMap() {
         throw new Error("Failed to save layout")
       }
 
-      console.log("Layout saved successfully")
+      console.log("Layout saved successfully for warehouse:", currentWarehouse.id)
 
-      // Log the layout change
       if (!skipLogging && username) {
         // Log layout change here if needed
       }
@@ -536,15 +551,13 @@ export default function DraggableWarehouseMap() {
         updatedAt: Date.now(),
       }
 
-      // Clear existing timeout
       if (debouncedSaveTimeout) {
         clearTimeout(debouncedSaveTimeout)
       }
 
-      // Set new timeout for debounced save
       const newTimeout = setTimeout(() => {
         console.log("⏰ Debounced save triggered for shelf:", updatedShelf.id)
-        saveLayout(updatedLayout, true) // Skip logging for position updates
+        saveLayout(updatedLayout, true)
       }, 1000)
 
       setDebouncedSaveTimeout(newTimeout)
@@ -567,7 +580,6 @@ export default function DraggableWarehouseMap() {
         updatedAt: Date.now(),
       }
 
-      // Save immediately for rotations (these are intentional actions)
       saveLayout(updatedLayout)
 
       return updatedLayout
@@ -586,7 +598,6 @@ export default function DraggableWarehouseMap() {
         updatedAt: Date.now(),
       }
 
-      // Save immediately for name changes
       saveLayout(updatedLayout)
 
       return updatedLayout
@@ -594,10 +605,14 @@ export default function DraggableWarehouseMap() {
   }
 
   const handleShelfDelete = async (shelfId: ShelfId) => {
-    try {
-      console.log("🗑️ Deleting shelf:", shelfId)
+    if (!currentWarehouse) {
+      console.log("❌ No current warehouse selected for deletion")
+      return
+    }
 
-      // Check if shelf has products
+    try {
+      console.log("🗑️ Deleting shelf:", shelfId, "from warehouse:", currentWarehouse.id)
+
       const checkResponse = await fetch("/api/layout", {
         method: "PUT",
         headers: {
@@ -606,6 +621,7 @@ export default function DraggableWarehouseMap() {
         body: JSON.stringify({
           action: "checkProducts",
           shelfId,
+          warehouse_id: currentWarehouse.id,
         }),
       })
 
@@ -662,7 +678,6 @@ export default function DraggableWarehouseMap() {
         updatedAt: Date.now(),
       }
 
-      // Save immediately for new shelves
       saveLayout(updatedLayout)
 
       return updatedLayout
@@ -682,10 +697,15 @@ export default function DraggableWarehouseMap() {
   }
 
   const handleResetLayout = async () => {
-    try {
-      console.log("🔄 Resetting layout...")
+    if (!currentWarehouse) {
+      console.log("❌ No current warehouse selected for reset")
+      return
+    }
 
-      const response = await fetch("/api/layout", {
+    try {
+      console.log("🔄 Resetting layout for warehouse:", currentWarehouse.id)
+
+      const response = await fetch(`/api/layout?warehouse_id=${currentWarehouse.id}`, {
         method: "DELETE",
       })
 
@@ -693,7 +713,7 @@ export default function DraggableWarehouseMap() {
         throw new Error("Failed to reset layout")
       }
 
-      console.log("Layout reset successfully")
+      console.log("Layout reset successfully for warehouse:", currentWarehouse.id)
       fetchLayout()
     } catch (error) {
       console.error("Error resetting layout:", error)
@@ -750,13 +770,79 @@ export default function DraggableWarehouseMap() {
     }
   }
 
+  const confirmDeleteShelf = () => {
+    if (!deleteConfirm || !currentWarehouse) return
+
+    const { shelfId } = deleteConfirm
+
+    setLayout((prevLayout) => {
+      if (!prevLayout) return prevLayout
+
+      console.log("🗑️ Deleting shelf from layout:", shelfId)
+
+      // Remove the shelf from the layout
+      const updatedLayout = {
+        ...prevLayout,
+        shelves: prevLayout.shelves.filter((shelf) => shelf.id !== shelfId),
+        updatedAt: Date.now(),
+      }
+
+      // Save the updated layout
+      saveLayout(updatedLayout)
+
+      // Show success message
+      toast({
+        title: "Başarılı",
+        description: `${shelfId} rafı başarıyla silindi.`,
+      })
+
+      return updatedLayout
+    })
+
+    // Close the confirmation dialog
+    setDeleteConfirm({ open: false, shelfId: "", productCount: 0 })
+  }
+
+  if (isMigrationNeeded) {
+    return (
+      <Card className="w-full">
+        <CardContent className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <Grid className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-lg font-medium mb-2">Çoklu Depo Sistemi Kurulumu Gerekli</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              Çoklu depo özelliğini kullanmak için migration script'lerini çalıştırmanız gerekiyor.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Lütfen önce SQL script'ini, sonra TypeScript migration script'ini çalıştırın.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!currentWarehouse) {
+    return (
+      <Card className="w-full">
+        <CardContent className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <Grid className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-lg font-medium mb-2">Depo Seçilmedi</p>
+            <p className="text-sm text-muted-foreground">Lütfen üst menüden bir depo seçin.</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (loading) {
     return (
       <Card className="w-full">
         <CardContent className="flex items-center justify-center h-96">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Layout yükleniyor...</p>
+            <p className="text-muted-foreground">{currentWarehouse.name} layout'u yükleniyor...</p>
           </div>
         </CardContent>
       </Card>
@@ -784,7 +870,7 @@ export default function DraggableWarehouseMap() {
             <span className="bg-primary/10 p-1 rounded-md">
               <Grid className="h-6 w-6 text-primary" />
             </span>
-            Depo Yerleşim Planı
+            {currentWarehouse.name} - Depo Yerleşim Planı
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
             {isEditMode
@@ -836,7 +922,6 @@ export default function DraggableWarehouseMap() {
         </div>
       </div>
 
-      {/* Küçük düzenleme modu bildirimi - Ana alanın dışında */}
       {isEditMode && (
         <div className="mb-3 flex justify-center">
           <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs flex items-center gap-2 shadow-sm">
@@ -849,7 +934,6 @@ export default function DraggableWarehouseMap() {
       )}
 
       <div className="relative w-full max-w-5xl mx-auto aspect-[5/3] bg-muted/20 rounded-lg p-6 overflow-hidden border border-border shadow-md">
-        {/* Grid background */}
         <div className="absolute inset-0 opacity-20">
           <div
             className="w-full h-full"
@@ -863,7 +947,6 @@ export default function DraggableWarehouseMap() {
           ></div>
         </div>
 
-        {/* Shelves */}
         {layout.shelves.map((shelf) => (
           <DraggableShelf
             key={shelf.id}
@@ -883,7 +966,6 @@ export default function DraggableWarehouseMap() {
           />
         ))}
 
-        {/* Add shelf hint when no shelves */}
         {isEditMode && layout.shelves.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center text-muted-foreground">
@@ -895,7 +977,6 @@ export default function DraggableWarehouseMap() {
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
       <ConfirmDialog
         open={deleteConfirm ? deleteConfirm.open : false}
         onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
@@ -911,7 +992,6 @@ export default function DraggableWarehouseMap() {
         onConfirm={confirmDeleteShelf}
       />
 
-      {/* Layers editor dialog */}
       {layersEditorShelf && (
         <ShelfLayersEditor
           open={!!layersEditorShelf}
@@ -926,7 +1006,6 @@ export default function DraggableWarehouseMap() {
           shelfId={selectedShelf}
           onClose={handleCloseModal}
           onRefresh={() => {
-            // Force re-fetch of layout when modal refreshes
             fetchLayout()
           }}
         />
@@ -935,7 +1014,6 @@ export default function DraggableWarehouseMap() {
   )
 }
 
-// Debounce function
 function debounce(func: Function, wait: number) {
   let timeout: NodeJS.Timeout | null = null
   return function (...args: any[]) {
@@ -953,8 +1031,4 @@ function getNextAvailableShelfId(shelves: ShelfLayout[] = []): ShelfId | null {
     }
   }
   return null
-}
-
-function confirmDeleteShelf() {
-  // Implementation for confirming shelf deletion
 }

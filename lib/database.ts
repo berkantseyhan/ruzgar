@@ -656,7 +656,7 @@ export async function getProductCountByShelf(shelfId: ShelfId, warehouseId?: str
     const { count, error } = await Promise.race([
       query,
       new Promise<{ count: number; error: any }>((_, reject) =>
-        setTimeout(() => reject(new Error("Sayım sorgusu zaman aşımına uğradı")), 10000),
+        setTimeout(() => reject(new Error("Sayım sorgusu zaman aşımına uğradı")), 15000),
       ),
     ])
 
@@ -940,8 +940,10 @@ export async function createWarehouse(
 }
 
 function getDefaultWarehouseLayout(warehouseId?: string): WarehouseLayout {
+  const layoutId = warehouseId ? generateUUID() : DEFAULT_LAYOUT_UUID
+
   return {
-    id: warehouseId ? `${warehouseId}-layout` : DEFAULT_LAYOUT_UUID,
+    id: layoutId,
     name: "Varsayılan Layout",
     shelves: [
       { id: "E", x: 5, y: 5, width: 25, height: 15, rotation: 0 },
@@ -958,4 +960,13 @@ function getDefaultWarehouseLayout(warehouseId?: string): WarehouseLayout {
     updatedAt: Date.now(),
     warehouse_id: warehouseId || DEFAULT_WAREHOUSE_ID,
   }
+}
+
+function generateUUID(): string {
+  // Simple UUID v4 generation that works in all environments
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === "x" ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
 }
