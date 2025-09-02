@@ -140,7 +140,7 @@ const fromSupabaseProduct = (product: DepoRuzgarProduct): Product => ({
 // Check if Supabase tables exist and create them if they don't
 async function ensureSupabaseTablesExist(): Promise<void> {
   try {
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Test connection with timeout
     const { error } = await Promise.race([
@@ -163,7 +163,7 @@ async function ensureSupabaseTablesExist(): Promise<void> {
     if (error instanceof Error) {
       throw error
     }
-    throw new Error("Supabase bağlantısı kurulamadı. Lütfen veritabanı ayarlarını kontrol edin.")
+    throw new Error("Supabase tabloları kontrol edilemedi")
   }
 }
 
@@ -293,7 +293,7 @@ export async function saveProduct(product: Product, username: string, isUpdate?:
       notlar: product.notlar.trim(),
     }
 
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     // Check if product exists
     const { data: existingData, error: selectError } = await Promise.race([
@@ -381,7 +381,7 @@ export async function deleteProduct(product: Product, username: string): Promise
 
   try {
     console.log(`📊 Deleting product from Supabase: ${product.id}`)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { error } = await Promise.race([
       supabase.from("Depo_Ruzgar_Products").delete().eq("id", product.id),
@@ -442,7 +442,7 @@ export async function logTransaction(
     await ensureSupabaseTablesExist()
 
     console.log(`📊 Logging transaction to Supabase: ${actionType} - ${urunAdi} by ${username}`)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { error } = await Promise.race([
       supabase.from("Depo_Ruzgar_Transaction_Logs").insert({
@@ -549,7 +549,7 @@ export async function saveWarehouseLayout(
     await ensureSupabaseTablesExist()
 
     console.log("📊 Saving warehouse layout to Supabase")
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { error } = await Promise.race([
       supabase.from("Depo_Ruzgar_Warehouse_Layouts").upsert({
@@ -581,7 +581,7 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
     await ensureSupabaseTablesExist()
 
     console.log(`📊 Fetching warehouse layout from Supabase for warehouse: ${warehouseId || "default"}`)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     let query = supabase.from("Depo_Ruzgar_Warehouse_Layouts").select("*")
 
@@ -594,7 +594,7 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
     const { data, error } = await Promise.race([
       query.single(),
       new Promise<{ data: any; error: any }>((_, reject) =>
-        setTimeout(() => reject(new Error("Layout sorgusu zaman aşımına uğradı")), 10000),
+        setTimeout(() => reject(new Error("Layout sorgusu zaman aşımına uğradı")), 15000),
       ),
     ])
 
@@ -645,7 +645,7 @@ export async function getProductCountByShelf(shelfId: ShelfId, warehouseId?: str
 
   try {
     console.log(`📊 Counting products in Supabase for shelf: ${shelfId}, warehouse: ${warehouseId || "default"}`)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     let query = supabase.from("Depo_Ruzgar_Products").select("*", { count: "exact", head: true }).eq("raf_no", shelfId)
 
@@ -678,7 +678,7 @@ export async function getTransactionLogs(warehouseId?: string): Promise<Transact
 
   try {
     console.log(`📊 Fetching transaction logs from Supabase for warehouse: ${warehouseId || "all"}`)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     let query = supabase.from("Depo_Ruzgar_Transaction_Logs").select("*")
 
@@ -781,7 +781,7 @@ export async function testSupabaseConnection(): Promise<{
   try {
     await ensureSupabaseTablesExist()
 
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
     const { count, error } = await Promise.race([
       supabase.from("Depo_Ruzgar_Products").select("count", { count: "exact", head: true }),
       new Promise<{ count: number; error: any }>((_, reject) =>
@@ -828,7 +828,7 @@ export async function getWarehouses(): Promise<Warehouse[]> {
 
   try {
     console.log("📊 Fetching warehouses from Supabase")
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { data, error } = await Promise.race([
       supabase
@@ -846,21 +846,24 @@ export async function getWarehouses(): Promise<Warehouse[]> {
       throw new Error(`Depolar yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
     }
 
-    const warehouses: Warehouse[] = (data || []).map((warehouse: any) => ({
+    if (!data || data.length === 0) {
+      console.log("📊 No warehouses found, returning empty array")
+      return []
+    }
+
+    console.log(`📊 Successfully fetched ${data.length} warehouses`)
+    return data.map((warehouse: any) => ({
       id: warehouse.id,
       name: warehouse.name,
       description: warehouse.description,
       color_code: warehouse.color_code,
       is_active: warehouse.is_active,
-      created_at: new Date(warehouse.created_at).getTime(),
-      updated_at: new Date(warehouse.updated_at).getTime(),
+      created_at: warehouse.created_at,
+      updated_at: warehouse.updated_at,
     }))
-
-    console.log(`Found ${warehouses.length} warehouses from Supabase`)
-    return warehouses
   } catch (error) {
     console.error("Error in getWarehouses:", error)
-    throw error
+    throw new Error(`Depolar yüklenirken hata: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -869,7 +872,7 @@ export async function getWarehouseById(warehouseId: string): Promise<Warehouse |
 
   try {
     console.log(`📊 Fetching warehouse ${warehouseId} from Supabase`)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { data, error } = await Promise.race([
       supabase.from("Depo_Ruzgar_Warehouses").select("*").eq("id", warehouseId).single(),
@@ -893,8 +896,8 @@ export async function getWarehouseById(warehouseId: string): Promise<Warehouse |
       description: data.description,
       color_code: data.color_code,
       is_active: data.is_active,
-      created_at: new Date(data.created_at).getTime(),
-      updated_at: new Date(data.updated_at).getTime(),
+      created_at: data.created_at,
+      updated_at: data.updated_at,
     }
 
     console.log(`Found warehouse: ${warehouse.name}`)
@@ -912,7 +915,7 @@ export async function createWarehouse(
 
   try {
     console.log(`📊 Creating warehouse: ${warehouse.name}`)
-    const supabase = createServerClient()
+    const supabase = await createServerClient()
 
     const { error } = await Promise.race([
       supabase.from("Depo_Ruzgar_Warehouses").insert({

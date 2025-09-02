@@ -12,6 +12,7 @@ interface WarehouseContextType {
   error: string | null
   refreshWarehouses: () => Promise<void>
   isMigrationNeeded: boolean
+  isSupabaseConfigured: boolean
 }
 
 const WarehouseContext = createContext<WarehouseContextType | null>(null)
@@ -34,16 +35,32 @@ export function WarehouseProvider({ children }: WarehouseProviderProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isMigrationNeeded, setIsMigrationNeeded] = useState(false)
+  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(true)
 
   const fetchWarehouses = async () => {
     try {
       setIsLoading(true)
       setError(null)
       setIsMigrationNeeded(false)
+      setIsSupabaseConfigured(true)
 
       const response = await fetch("/api/warehouses")
 
       if (!response.ok) {
+        if (response.status === 503) {
+          const errorData = await response.json()
+          if (errorData.fallback) {
+            console.log("Supabase not configured - running in fallback mode")
+            setIsSupabaseConfigured(false)
+            setError(
+              "Supabase veritabanı yapılandırılmamış. Lütfen Project Settings'ten Supabase integration'ını kontrol edin.",
+            )
+            setWarehouses([])
+            setCurrentWarehouse(null)
+            return
+          }
+        }
+
         const errorText = await response.text()
 
         // Check if it's a database table missing error
@@ -108,6 +125,7 @@ export function WarehouseProvider({ children }: WarehouseProviderProps) {
     error,
     refreshWarehouses: fetchWarehouses,
     isMigrationNeeded,
+    isSupabaseConfigured,
   }
 
   return <WarehouseContext.Provider value={value}>{children}</WarehouseContext.Provider>

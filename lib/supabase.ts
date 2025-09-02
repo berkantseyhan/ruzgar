@@ -1,58 +1,37 @@
+import { createClient as createBrowserClient } from "./supabase/client"
+import { createClient as createServerClient } from "./supabase/server"
 import { createClient } from "@supabase/supabase-js"
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
-if (!supabaseUrl) {
-  console.error("NEXT_PUBLIC_SUPABASE_URL is not defined in environment variables")
+const SUPABASE_AVAILABLE = !!(supabaseUrl && supabaseAnonKey)
+
+if (!SUPABASE_AVAILABLE) {
+  console.warn("Supabase not configured - using fallback mode")
 }
 
-if (!supabaseAnonKey) {
-  console.error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined in environment variables")
-}
+// Export both client types for different use cases
+export { createBrowserClient, createServerClient }
+
+export const supabase = SUPABASE_AVAILABLE ? createBrowserClient() : null
 
 // Client-side Supabase client (singleton pattern)
 let supabaseClient: ReturnType<typeof createClient> | null = null
 
-export const getSupabaseClient = () => {
+export const getClient = () => {
+  if (!SUPABASE_AVAILABLE) {
+    console.warn("Supabase not configured - using fallback mode")
+    return null
+  }
+
   if (!supabaseClient) {
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error("Supabase environment variables are not properly configured")
-    }
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+    supabaseClient = createClient(supabaseUrl!, supabaseAnonKey!)
   }
   return supabaseClient
 }
 
-// Server-side Supabase client - FIXED EXPORT
-export const createServerClient = () => {
-  if (!supabaseUrl) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not defined")
-  }
-
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
-  if (!serviceRoleKey) {
-    throw new Error("Neither SUPABASE_SERVICE_ROLE_KEY nor NEXT_PUBLIC_SUPABASE_ANON_KEY is defined")
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey)
-}
-
-export const supabase = (() => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("Supabase configuration is incomplete. Some features may not work.")
-    // Return a mock client that will throw helpful errors
-    return {
-      from: () => ({
-        select: () => Promise.reject(new Error("Supabase is not properly configured")),
-        insert: () => Promise.reject(new Error("Supabase is not properly configured")),
-        update: () => Promise.reject(new Error("Supabase is not properly configured")),
-        delete: () => Promise.reject(new Error("Supabase is not properly configured")),
-      }),
-    } as any
-  }
-  return createClient(supabaseUrl, supabaseAnonKey)
-})()
+export const isSupabaseAvailable = () => SUPABASE_AVAILABLE
 
 // Database table names with prefix
 export const TABLES = {
@@ -105,10 +84,17 @@ export interface DepoRuzgarAuthPassword {
   updated_at: string
 }
 
-// Test database connection
 export async function testSupabaseConnection(): Promise<boolean> {
+  if (!SUPABASE_AVAILABLE) {
+    console.log("Supabase not configured - running in fallback mode")
+    return false
+  }
+
   try {
-    const { data, error } = await supabase.from(TABLES.PRODUCTS).select("count").limit(1)
+    const client = getClient()
+    if (!client) return false
+
+    const { data, error } = await client.from(TABLES.PRODUCTS).select("count").limit(1)
 
     if (error) {
       console.log("Supabase connection test failed:", error.message)
@@ -121,4 +107,33 @@ export async function testSupabaseConnection(): Promise<boolean> {
     console.log("Supabase connection error:", error)
     return false
   }
+}
+
+export const fallbackStorage = {
+  get: (key: string) => {
+    try {
+      const item = localStorage.getItem(`depo_ruzgar_${key}`)
+      return item ? JSON.parse(item) : null
+    } catch {
+      return null
+    }
+  },
+
+  set: (key: string, value: any) => {
+    try {
+      localStorage.setItem(`depo_ruzgar_${key}`, JSON.stringify(value))
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  remove: (key: string) => {
+    try {
+      localStorage.removeItem(`depo_ruzgar_${key}`)
+      return true
+    } catch {
+      return false
+    }
+  },
 }

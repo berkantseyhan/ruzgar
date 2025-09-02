@@ -1,10 +1,24 @@
 import { NextResponse } from "next/server"
 import { getWarehouses, createWarehouse } from "@/lib/database"
+import { isSupabaseAvailable } from "@/lib/supabase"
 import type { Warehouse } from "@/lib/database"
 
 export async function GET() {
   try {
     console.log("GET /api/warehouses - Fetching all warehouses...")
+
+    if (!isSupabaseAvailable()) {
+      console.log("⚠️ Supabase not available - using fallback mode")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Veritabanı bağlantısı mevcut değil",
+          details: "Supabase integration is not configured. Please check your Project Settings.",
+          fallback: true,
+        },
+        { status: 503 },
+      )
+    }
 
     const warehouses = await getWarehouses()
 
@@ -30,6 +44,19 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     console.log("POST /api/warehouses - Creating new warehouse...")
+
+    if (!isSupabaseAvailable()) {
+      console.log("⚠️ Supabase not available - cannot create warehouse")
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Veritabanı bağlantısı mevcut değil",
+          details: "Supabase integration is not configured. Please check your Project Settings.",
+          fallback: true,
+        },
+        { status: 503 },
+      )
+    }
 
     const body = await request.json()
     const { name, description, color_code } = body
