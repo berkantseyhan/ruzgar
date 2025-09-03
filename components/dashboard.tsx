@@ -5,13 +5,12 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useTheme } from "@/lib/theme-context"
 import { Button } from "@/components/ui/button"
-import { LogOut, Moon, Sun, Download, Loader2, History, Database, User, LayoutDashboard, Map, Plus } from "lucide-react"
+import { LogOut, Moon, Sun, Loader2, History, Database, User, LayoutDashboard, Map, Plus } from "lucide-react"
 import WarehouseMap from "@/components/warehouse-map"
 import ProductForm from "@/components/product-form"
 import { WarehouseSelector } from "@/components/warehouse-selector"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
-import { convertHeadersForCSV } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 
 export default function Dashboard() {
@@ -20,7 +19,6 @@ export default function Dashboard() {
   const router = useRouter()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("harita")
-  const [isExporting, setIsExporting] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleLogout = async () => {
@@ -47,79 +45,6 @@ export default function Dashboard() {
 
     logout()
     router.push("/login")
-  }
-
-  const handleExportCSV = async () => {
-    try {
-      setIsExporting(true)
-      // Get all products
-      const response = await fetch("/api/products")
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch products")
-      }
-
-      const data = await response.json()
-      const products = data.products || []
-
-      if (products.length === 0) {
-        toast({
-          title: "Uyarı",
-          description: "Dışa aktarılacak ürün bulunamadı.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Define headers with Turkish characters
-      const turkishHeaders = ["Raf No", "Katman", "Ürün Adı", "Kategori", "Ölçü", "Kilogram", "Notlar"]
-
-      // Convert headers to Latin equivalents
-      const latinHeaders = convertHeadersForCSV(turkishHeaders)
-
-      // Create CSV rows with semicolon separator
-      const csvRows = [
-        latinHeaders.join(";"),
-        ...products.map((product) =>
-          [
-            product.rafNo,
-            product.katman,
-            product.urunAdi.replace(/;/g, ","),
-            product.kategori.replace(/;/g, ","),
-            product.olcu.replace(/;/g, ","),
-            String(product.kilogram).replace(".", ","), // Use comma as decimal separator for Excel
-            product.notlar.replace(/;/g, ","),
-          ].join(";"),
-        ),
-      ]
-
-      const csvContent = csvRows.join("\r\n") // Use Windows line endings for better Excel compatibility
-
-      // Create a blob with UTF-8 BOM for Excel compatibility
-      const BOM = "\uFEFF"
-      const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.setAttribute("href", url)
-      link.setAttribute("download", `depo-envanter-${new Date().toISOString().split("T")[0]}.csv`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
-      toast({
-        title: "Başarılı",
-        description: "Envanter verisi CSV olarak indirildi.",
-      })
-    } catch (error) {
-      console.error("CSV export error:", error)
-      toast({
-        title: "Hata",
-        description: "CSV dışa aktarımı sırasında bir hata oluştu.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsExporting(false)
-    }
   }
 
   if (isLoading) {
@@ -162,16 +87,6 @@ export default function Dashboard() {
               >
                 {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 <span className="sr-only">Tema Değiştir</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleExportCSV}
-                disabled={isExporting}
-                className="rounded-full transition-colors duration-200"
-              >
-                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                <span className="sr-only">CSV İndir</span>
               </Button>
               <Button
                 variant="ghost"
