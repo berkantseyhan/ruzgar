@@ -604,53 +604,107 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
       query = query.eq("id", DEFAULT_LAYOUT_UUID).eq("is_active", true)
     }
 
-    const { data, error } = await Promise.race([
-      query.single(),
-      new Promise<{ data: any; error: any }>((_, reject) =>
-        setTimeout(() => reject(new Error("Layout sorgusu zaman aşımına uğradı")), 15000),
-      ),
-    ])
+    let retryCount = 0
+    const maxRetries = 3
 
-    if (error && error.code !== "PGRST116") {
-      console.error("Warehouse layout query error:", error)
-      throw new Error(`Layout yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
-    }
+    while (retryCount < maxRetries) {
+      try {
+        const { data, error } = await Promise.race([
+          query.single(),
+          new Promise<{ data: any; error: any }>((_, reject) =>
+            setTimeout(() => reject(new Error("Layout sorgusu zaman aşımına uğradı")), 15000),
+          ),
+        ])
 
-    if (!data) {
-      console.log("📊 No active layout found, creating default layout")
-      const defaultLayout = getDefaultWarehouseLayout(warehouseId)
-      const saved = await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
-      if (!saved) {
-        throw new Error("Varsayılan layout oluşturulamadı")
+        if (error && error.code !== "PGRST116") {
+          if (error.message && (error.message.includes("Too Many") || error.message.includes("rate limit"))) {
+            console.warn(`Rate limit hit, retrying in ${(retryCount + 1) * 2} seconds...`)
+            await new Promise((resolve) => setTimeout(resolve, (retryCount + 1) * 2000))
+            retryCount++
+            continue
+          }
+
+          console.error("Warehouse layout query error:", error)
+          throw new Error(`Layout yüklenirken hata: ${error.message || error.code || "Bilinmeyen hata"}`)
+        }
+
+        if (!data) {
+          console.log("📊 No active layout found, creating default layout")
+          const defaultLayout = getDefaultWarehouseLayout(warehouseId)
+          const saved = await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
+          if (!saved) {
+            throw new Error("Varsayılan layout oluşturulamadı")
+          }
+          return defaultLayout
+        }
+
+        let shelves
+        try {
+          if (typeof data.shelves === "string") {
+            shelves = JSON.parse(data.shelves)
+          } else {
+            shelves = data.shelves
+          }
+
+          if (!Array.isArray(shelves)) {
+            throw new Error("Shelves data is not an array")
+          }
+        } catch (parseError) {
+          console.error("Error parsing shelves data:", parseError)
+          console.log("Raw shelves data:", data.shelves)
+          throw new Error("Layout verisi bozuk, varsayılan layout kullanılacak")
+        }
+
+        // Convert to legacy format and ensure rotation property exists
+        const layout: WarehouseLayout = {
+          id: data.id,
+          name: data.name,
+          shelves: shelves.map((shelf: any) => ({
+            ...shelf,
+            rotation: shelf.rotation || 0, // Ensure rotation property exists
+          })),
+          createdAt: new Date(data.created_at).getTime(),
+          updatedAt: new Date(data.updated_at).getTime(),
+          warehouse_id: data.warehouse_id,
+        }
+
+        console.log("✅ Warehouse layout fetched from Supabase successfully")
+        return layout
+      } catch (queryError) {
+        if (
+          queryError instanceof Error &&
+          (queryError.message.includes("Too Many") ||
+            queryError.message.includes("rate limit") ||
+            queryError.message.includes("timeout"))
+        ) {
+          console.warn(`Query failed (attempt ${retryCount + 1}/${maxRetries}):`, queryError.message)
+          if (retryCount < maxRetries - 1) {
+            await new Promise((resolve) => setTimeout(resolve, (retryCount + 1) * 2000))
+            retryCount++
+            continue
+          }
+        }
+        throw queryError
       }
-      return defaultLayout
     }
 
-    // Convert to legacy format and ensure rotation property exists
-    const layout: WarehouseLayout = {
-      id: data.id,
-      name: data.name,
-      shelves: data.shelves.map((shelf: any) => ({
-        ...shelf,
-        rotation: shelf.rotation || 0, // Ensure rotation property exists
-      })),
-      createdAt: new Date(data.created_at).getTime(),
-      updatedAt: new Date(data.updated_at).getTime(),
-      warehouse_id: data.warehouse_id,
-    }
-
-    console.log("✅ Warehouse layout fetched from Supabase successfully")
-    return layout
+    throw new Error("Layout yüklenemedi: Maksimum deneme sayısına ulaşıldı")
   } catch (error) {
     console.error("Error in getWarehouseLayout:", error)
+
+    if (error instanceof Error && error.message.includes("Layout verisi bozuk")) {
+      console.log("📊 Creating default layout due to corrupted data")
+      const defaultLayout = getDefaultWarehouseLayout(warehouseId)
+      try {
+        await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
+        return defaultLayout
+      } catch (saveError) {
+        console.error("Failed to save default layout:", saveError)
+      }
+    }
+
     throw error
   }
-}
-
-// Reset warehouse layout
-export async function resetWarehouseLayout(): Promise<boolean> {
-  const defaultLayout = getDefaultWarehouseLayout()
-  return await saveWarehouseLayout(defaultLayout)
 }
 
 export async function getProductCountByShelf(shelfId: ShelfId, warehouseId?: string): Promise<number> {

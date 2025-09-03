@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, Search, Download, Loader2, Filter, Calendar, Clock, User, Edit, LogIn, LogOut } from "lucide-react"
-import type { TransactionLog } from "@/lib/redis"
+import type { TransactionLog } from "@/lib/types"
 import { useToast } from "@/components/ui/use-toast"
 import { convertHeadersForCSV } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -18,7 +18,67 @@ export default function TransactionLogComponent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [shelfNameMap, setShelfNameMap] = useState<Record<string, string>>({})
+  const [warehouseMap, setWarehouseMap] = useState<Record<string, string>>({})
+  const [shelfNamesLoaded, setShelfNamesLoaded] = useState(false)
   const { toast } = useToast()
+
+  const fetchShelfNames = async () => {
+    try {
+      console.log("[v0] Fetching shelf names for transaction log...")
+      const warehousesResponse = await fetch("/api/warehouses")
+      if (!warehousesResponse.ok) {
+        throw new Error("Failed to fetch warehouses")
+      }
+      const warehousesData = await warehousesResponse.json()
+
+      const nameMap: Record<string, string> = {}
+      const warehouseShelfMap: Record<string, string> = {}
+
+      for (const warehouse of warehousesData.warehouses) {
+        try {
+          const layoutResponse = await fetch(`/api/layout?warehouse_id=${warehouse.id}`)
+          if (layoutResponse.ok) {
+            const layoutData = await layoutResponse.json()
+            if (layoutData.layout?.shelves) {
+              for (const shelf of layoutData.layout.shelves) {
+                const displayName = shelf.name || shelf.id
+                nameMap[shelf.id] = displayName
+                warehouseShelfMap[shelf.id] = warehouse.name
+                console.log(`[v0] Mapped shelf ${shelf.id} to "${displayName}" in warehouse "${warehouse.name}"`)
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`[v0] Error fetching layout for warehouse ${warehouse.name}:`, error)
+        }
+      }
+
+      setShelfNameMap(nameMap)
+      setWarehouseMap(warehouseShelfMap)
+      setShelfNamesLoaded(true)
+      console.log("[v0] Shelf name mapping completed:", nameMap)
+    } catch (error) {
+      console.error("[v0] Error fetching shelf names:", error)
+      setShelfNamesLoaded(true) // Still allow the component to work without shelf names
+    }
+  }
+
+  const getShelfDisplayName = (shelfId: string): string => {
+    if (shelfId === "sistem") return "Sistem"
+    if (!shelfNamesLoaded) return "Yükleniyor..."
+    return shelfNameMap[shelfId] || shelfId
+  }
+
+  const getWarehouseColor = (shelfId: string): string => {
+    const warehouseName = warehouseMap[shelfId]
+    if (warehouseName === "Ana Depo") {
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+    } else if (warehouseName === "İkinci Depo") {
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 border-green-200 dark:border-green-800"
+    }
+    return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700"
+  }
 
   const fetchLogs = async () => {
     setLoading(true)
@@ -45,19 +105,19 @@ export default function TransactionLogComponent() {
 
   useEffect(() => {
     fetchLogs()
+    fetchShelfNames()
 
-    // Set up polling for real-time updates
     const interval = setInterval(fetchLogs, 30000) // Poll every 30 seconds
 
     return () => clearInterval(interval)
   }, [])
 
-  // Make sure logs are sorted by timestamp (newest first)
   const sortedLogs = [...logs].sort((a, b) => b.timestamp - a.timestamp)
 
   const filteredLogs = sortedLogs.filter(
     (log) =>
       log.urunAdi.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getShelfDisplayName(log.rafNo).toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.rafNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.katman.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.actionType.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -106,7 +166,6 @@ export default function TransactionLogComponent() {
     }
   }
 
-  // Helper function to format field name for display
   const formatFieldName = (fieldName: string): string => {
     const fieldNameMap: Record<string, string> = {
       urunAdi: "Ürün Adı",
@@ -120,17 +179,17 @@ export default function TransactionLogComponent() {
     return fieldNameMap[fieldName] || fieldName
   }
 
-  // Helper function to format field value for display
   const formatFieldValue = (field: string, value: string | number): string => {
     if (field === "kilogram") {
       return `${value} kg`
     }
+    if (field === "rafNo") {
+      return getShelfDisplayName(String(value))
+    }
     return String(value)
   }
 
-  // Format changes for display
   const formatChanges = (log: TransactionLog): JSX.Element => {
-    // For login/logout actions, show session info
     if ((log.actionType === "Giriş" || log.actionType === "Çıkış") && log.sessionInfo) {
       const sessionInfo = log.sessionInfo
       return (
@@ -163,7 +222,6 @@ export default function TransactionLogComponent() {
       )
     }
 
-    // For update actions, show field changes
     if (log.actionType === "Güncelleme" && log.changes && log.changes.length > 0) {
       return (
         <div className="space-y-1">
@@ -191,43 +249,34 @@ export default function TransactionLogComponent() {
           ))}
         </div>
       )
-    }
-
-    // For add actions, show product details
-    else if (log.actionType === "Ekleme" && log.productDetails) {
+    } else if (log.actionType === "Ekleme" && log.productDetails) {
       const details = log.productDetails
       return (
         <div className="text-xs">
           <span className="font-medium text-green-700 dark:text-green-400">Eklendi: </span>
           <span className="font-mono bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-1.5 py-0.5 rounded">
-            {details.urunAdi} | {details.kilogram} kg | {details.olcu} ölçü | Raf: {details.rafNo} | Katman:{" "}
-            {details.katman}
+            {details.urunAdi} | {details.kilogram} kg | {details.olcu} ölçü | Raf: {getShelfDisplayName(details.rafNo)}{" "}
+            | Katman: {details.katman}
           </span>
         </div>
       )
-    }
-
-    // For delete actions, show product details
-    else if (log.actionType === "Silme" && log.productDetails) {
+    } else if (log.actionType === "Silme" && log.productDetails) {
       const details = log.productDetails
       return (
         <div className="text-xs">
           <span className="font-medium text-red-700 dark:text-red-400">Silindi: </span>
           <span className="font-mono bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300 px-1.5 py-0.5 rounded">
-            {details.urunAdi} | {details.kilogram} kg | {details.olcu} ölçü | Raf: {details.rafNo} | Katman:{" "}
-            {details.katman}
+            {details.urunAdi} | {details.kilogram} kg | {details.olcu} ölçü | Raf: {getShelfDisplayName(details.rafNo)}{" "}
+            | Katman: {details.katman}
           </span>
         </div>
       )
     }
 
-    // Default case
     return <span className="text-muted-foreground text-sm">-</span>
   }
 
-  // Format changes for CSV export
   const formatChangesForCSV = (log: TransactionLog): string => {
-    // For login/logout actions
     if ((log.actionType === "Giriş" || log.actionType === "Çıkış") && log.sessionInfo) {
       const sessionInfo = log.sessionInfo
       let result = log.actionType === "Giriş" ? "Oturum Açıldı" : "Oturum Kapatıldı"
@@ -241,7 +290,6 @@ export default function TransactionLogComponent() {
       return result
     }
 
-    // For update actions, show field changes
     if (log.actionType === "Güncelleme" && log.changes && log.changes.length > 0) {
       return log.changes
         .map(
@@ -249,18 +297,12 @@ export default function TransactionLogComponent() {
             `${formatFieldName(change.field)}: ${formatFieldValue(change.field, change.oldValue)} → ${formatFieldValue(change.field, change.newValue)}`,
         )
         .join("; ")
-    }
-
-    // For add actions, show product details
-    else if (log.actionType === "Ekleme" && log.productDetails) {
+    } else if (log.actionType === "Ekleme" && log.productDetails) {
       const details = log.productDetails
-      return `Eklendi: ${details.urunAdi} | ${details.kilogram} kg | ${details.olcu} ölçü | Raf: ${details.rafNo} | Katman: ${details.katman}`
-    }
-
-    // For delete actions, show product details
-    else if (log.actionType === "Silme" && log.productDetails) {
+      return `Eklendi: ${details.urunAdi} | ${details.kilogram} kg | ${details.olcu} ölçü | Raf: ${getShelfDisplayName(details.rafNo)} | Katman: ${details.katman}`
+    } else if (log.actionType === "Silme" && log.productDetails) {
       const details = log.productDetails
-      return `Silindi: ${details.urunAdi} | ${details.kilogram} kg | ${details.olcu} ölçü | Raf: ${details.rafNo} | Katman: ${details.katman}`
+      return `Silindi: ${details.urunAdi} | ${details.kilogram} kg | ${details.olcu} ölçü | Raf: ${getShelfDisplayName(details.rafNo)} | Katman: ${details.katman}`
     }
 
     return "-"
@@ -268,7 +310,6 @@ export default function TransactionLogComponent() {
 
   const handleExportCSV = () => {
     try {
-      // Define headers with Turkish characters
       const turkishHeaders = [
         "Tarih",
         "İşlem Türü",
@@ -279,17 +320,15 @@ export default function TransactionLogComponent() {
         "Kullanıcı",
       ]
 
-      // Convert headers to Latin equivalents
       const latinHeaders = convertHeadersForCSV(turkishHeaders)
 
-      // Create CSV rows with semicolon separator
       const csvRows = [
         latinHeaders.join(";"),
         ...filteredLogs.map((log) =>
           [
             formatDate(log.timestamp).replace(/;/g, ","),
             log.actionType.replace(/;/g, ","),
-            log.rafNo.replace(/;/g, ","),
+            getShelfDisplayName(log.rafNo).replace(/;/g, ","),
             log.katman.replace(/;/g, ","),
             log.urunAdi.replace(/;/g, ","),
             formatChangesForCSV(log).replace(/;/g, ","),
@@ -298,9 +337,8 @@ export default function TransactionLogComponent() {
         ),
       ]
 
-      const csvContent = csvRows.join("\r\n") // Use Windows line endings for better Excel compatibility
+      const csvContent = csvRows.join("\r\n")
 
-      // Create a blob with UTF-8 BOM for Excel compatibility
       const BOM = "\uFEFF"
       const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
       const url = URL.createObjectURL(blob)
@@ -438,8 +476,22 @@ export default function TransactionLogComponent() {
                     </TableCell>
                     <TableCell>
                       {log.rafNo !== "sistem" ? (
-                        <Badge variant="outline" className="font-normal">
-                          {log.rafNo}
+                        <Badge
+                          variant="outline"
+                          className={`font-normal ${
+                            shelfNamesLoaded
+                              ? getWarehouseColor(log.rafNo)
+                              : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                          }`}
+                        >
+                          {!shelfNamesLoaded ? (
+                            <div className="flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Yükleniyor...
+                            </div>
+                          ) : (
+                            getShelfDisplayName(log.rafNo)
+                          )}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground text-sm">-</span>

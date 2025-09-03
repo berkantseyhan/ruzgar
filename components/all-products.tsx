@@ -16,6 +16,28 @@ import { Badge } from "@/components/ui/badge"
 type SortField = "rafNo" | "katman" | "urunAdi" | "kategori" | "olcu" | "kilogram"
 type SortDirection = "asc" | "desc"
 
+interface ShelfLayout {
+  id: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  rotation: number
+  layers: number
+  products: any[]
+}
+
+interface WarehouseLayout {
+  id: string
+  name: string
+  shelves: ShelfLayout[]
+  warehouse_id: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export default function AllProductsComponent() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,7 +45,60 @@ export default function AllProductsComponent() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortField, setSortField] = useState<SortField>("rafNo")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
+  const [shelfNameMap, setShelfNameMap] = useState<Record<string, string>>({})
+  const [shelfNamesLoaded, setShelfNamesLoaded] = useState(false)
+  const [shelfWarehouseMap, setShelfWarehouseMap] = useState<Record<string, string>>({})
   const { toast } = useToast()
+
+  const fetchShelfNames = async () => {
+    try {
+      console.log("🔄 Fetching shelf names from all warehouses...")
+      const warehousesResponse = await fetch("/api/warehouses")
+      if (!warehousesResponse.ok) {
+        throw new Error("Failed to fetch warehouses")
+      }
+      const warehousesData = await warehousesResponse.json()
+
+      const nameMap: Record<string, string> = {}
+      const warehouseMap: Record<string, string> = {}
+
+      for (const warehouse of warehousesData.warehouses || []) {
+        try {
+          const layoutResponse = await fetch(`/api/layout?warehouse_id=${warehouse.id}&t=${Date.now()}`, {
+            method: "GET",
+            headers: {
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
+            },
+          })
+
+          if (layoutResponse.ok) {
+            const layoutData = await layoutResponse.json()
+            const layout: WarehouseLayout = layoutData.layout
+
+            if (layout?.shelves) {
+              layout.shelves.forEach((shelf) => {
+                nameMap[shelf.id] = shelf.name || shelf.id
+                warehouseMap[shelf.id] = warehouse.name
+                console.log(`Mapped shelf ${shelf.id} to "${shelf.name || shelf.id}" in warehouse "${warehouse.name}"`)
+              })
+            }
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch layout for warehouse ${warehouse.id}:`, err)
+        }
+      }
+
+      console.log("✅ Shelf name mapping created:", Object.keys(nameMap).length, "shelves")
+      setShelfNameMap(nameMap)
+      setShelfWarehouseMap(warehouseMap)
+      setShelfNamesLoaded(true)
+    } catch (err) {
+      console.error("❌ Error fetching shelf names:", err)
+      setShelfNamesLoaded(true)
+    }
+  }
 
   const fetchProducts = async () => {
     setLoading(true)
@@ -51,8 +126,30 @@ export default function AllProductsComponent() {
   }
 
   useEffect(() => {
-    fetchProducts()
+    const fetchData = async () => {
+      await Promise.all([fetchProducts(), fetchShelfNames()])
+    }
+    fetchData()
   }, [])
+
+  const getShelfDisplayName = (shelfId: string) => {
+    if (!shelfNamesLoaded) {
+      return "Yükleniyor..."
+    }
+    return shelfNameMap[shelfId] || shelfId
+  }
+
+  const getShelfDisplayComponent = (shelfId: string) => {
+    if (!shelfNamesLoaded) {
+      return (
+        <div className="flex items-center gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          <span className="text-xs">Yükleniyor...</span>
+        </div>
+      )
+    }
+    return shelfNameMap[shelfId] || shelfId
+  }
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -64,24 +161,25 @@ export default function AllProductsComponent() {
   }
 
   const filteredAndSortedProducts = useMemo(() => {
-    // First filter
     const filtered = products.filter(
       (product) =>
         product.urunAdi.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.kategori.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.olcu.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.rafNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getShelfDisplayName(product.rafNo).toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.katman.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.notlar.toLowerCase().includes(searchTerm.toLowerCase()),
     )
 
-    // Then sort
     return [...filtered].sort((a, b) => {
       let valueA: string | number = a[sortField]
       let valueB: string | number = b[sortField]
 
-      // Handle numeric fields
-      if (sortField === "kilogram") {
+      if (sortField === "rafNo") {
+        valueA = getShelfDisplayName(String(valueA)).toLowerCase()
+        valueB = getShelfDisplayName(String(valueB)).toLowerCase()
+      } else if (sortField === "kilogram") {
         valueA = Number(valueA)
         valueB = Number(valueB)
       } else {
@@ -93,35 +191,45 @@ export default function AllProductsComponent() {
       if (valueA > valueB) return sortDirection === "asc" ? 1 : -1
       return 0
     })
-  }, [products, searchTerm, sortField, sortDirection])
+  }, [products, searchTerm, sortField, sortDirection, shelfNameMap, shelfNamesLoaded])
 
   const handleExportCSV = () => {
     try {
-      // Define headers with Turkish characters
+      if (!shelfNamesLoaded || Object.keys(shelfNameMap).length === 0) {
+        toast({
+          title: "Uyarı",
+          description: "Raf isimleri henüz yüklenmedi. Lütfen birkaç saniye bekleyin ve tekrar deneyin.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      console.log("[v0] Exporting CSV with shelf name map:", shelfNameMap)
+
       const turkishHeaders = ["Raf No", "Katman", "Ürün Adı", "Kategori", "Ölçü", "Kilogram", "Notlar"]
 
-      // Convert headers to Latin equivalents
       const latinHeaders = convertHeadersForCSV(turkishHeaders)
 
-      // Create CSV rows with semicolon separator
       const csvRows = [
         latinHeaders.join(";"),
-        ...filteredAndSortedProducts.map((product) =>
-          [
-            product.rafNo,
+        ...filteredAndSortedProducts.map((product) => {
+          const shelfDisplayName = getShelfDisplayName(product.rafNo)
+          console.log("[v0] CSV row - Original shelf ID:", product.rafNo, "Display name:", shelfDisplayName)
+
+          return [
+            shelfDisplayName,
             product.katman,
             product.urunAdi.replace(/;/g, ","),
             product.kategori.replace(/;/g, ","),
             product.olcu.replace(/;/g, ","),
             String(product.kilogram).replace(".", ","), // Use comma as decimal separator for Excel
             product.notlar.replace(/;/g, ","),
-          ].join(";"),
-        ),
+          ].join(";")
+        }),
       ]
 
-      const csvContent = csvRows.join("\r\n") // Use Windows line endings for better Excel compatibility
+      const csvContent = csvRows.join("\r\n")
 
-      // Create a blob with UTF-8 BOM for Excel compatibility
       const BOM = "\uFEFF"
       const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
       const url = URL.createObjectURL(blob)
@@ -160,24 +268,15 @@ export default function AllProductsComponent() {
   )
 
   const getShelfBadgeColor = (shelfId: string) => {
-    switch (shelfId) {
-      case "A":
-        return "bg-shelf-a text-white"
-      case "B":
-        return "bg-shelf-b text-white"
-      case "C":
-        return "bg-shelf-c text-white"
-      case "D":
-        return "bg-shelf-d text-white"
-      case "E":
-        return "bg-shelf-e text-white"
-      case "F":
-        return "bg-shelf-f text-white"
-      case "G":
-        return "bg-shelf-g text-white"
-      default:
-        return "bg-shelf-common text-white"
+    const warehouseName = shelfWarehouseMap[shelfId]
+
+    if (warehouseName === "Ana Depo") {
+      return "bg-blue-500 hover:bg-blue-600 text-white"
+    } else if (warehouseName === "İkinci Depo") {
+      return "bg-green-500 hover:bg-green-600 text-white"
     }
+
+    return "bg-gray-500 hover:bg-gray-600 text-white"
   }
 
   return (
@@ -212,7 +311,10 @@ export default function AllProductsComponent() {
             <Button
               variant="outline"
               size="icon"
-              onClick={fetchProducts}
+              onClick={() => {
+                fetchProducts()
+                fetchShelfNames()
+              }}
               disabled={loading}
               className="shadow-sm hover:shadow-md transition-all bg-transparent"
             >
@@ -223,7 +325,9 @@ export default function AllProductsComponent() {
               variant="outline"
               size="icon"
               onClick={handleExportCSV}
-              disabled={filteredAndSortedProducts.length === 0}
+              disabled={
+                filteredAndSortedProducts.length === 0 || !shelfNamesLoaded || Object.keys(shelfNameMap).length === 0
+              }
               className="shadow-sm hover:shadow-md transition-all bg-transparent"
             >
               <Download className="h-4 w-4" />
@@ -268,7 +372,9 @@ export default function AllProductsComponent() {
                 {filteredAndSortedProducts.map((product) => (
                   <TableRow key={product.id} className="hover:bg-muted/20 transition-colors">
                     <TableCell>
-                      <Badge className={`${getShelfBadgeColor(product.rafNo)} font-normal`}>{product.rafNo}</Badge>
+                      <Badge className={`${getShelfBadgeColor(product.rafNo)} font-normal transition-colors`}>
+                        {getShelfDisplayComponent(product.rafNo)}
+                      </Badge>
                     </TableCell>
                     <TableCell>{product.katman}</TableCell>
                     <TableCell className="font-medium">
