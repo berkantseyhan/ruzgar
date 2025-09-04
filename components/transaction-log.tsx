@@ -72,9 +72,9 @@ export default function TransactionLogComponent() {
 
   const getWarehouseColor = (shelfId: string): string => {
     const warehouseName = warehouseMap[shelfId]
-    if (warehouseName === "Ana Depo") {
+    if (warehouseName === "Dış Depo") {
       return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 border-blue-200 dark:border-blue-800"
-    } else if (warehouseName === "İkinci Depo") {
+    } else if (warehouseName === "İç Depo") {
       return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 border-green-200 dark:border-green-800"
     }
     return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700"

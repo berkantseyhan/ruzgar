@@ -270,9 +270,9 @@ export default function AllProductsComponent() {
   const getShelfBadgeColor = (shelfId: string) => {
     const warehouseName = shelfWarehouseMap[shelfId]
 
-    if (warehouseName === "Ana Depo") {
+    if (warehouseName === "Dış Depo") {
       return "bg-blue-500 hover:bg-blue-600 text-white"
-    } else if (warehouseName === "İkinci Depo") {
+    } else if (warehouseName === "İç Depo") {
       return "bg-green-500 hover:bg-green-600 text-white"
     }
 
