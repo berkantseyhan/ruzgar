@@ -173,31 +173,34 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
           border-bottom: 2px solid #333;
           padding-bottom: 10px;
           margin-bottom: 15px;
+          display: none;
         }
         
-        .header h1 {
-          font-size: 20px;
-          font-weight: bold;
-          margin-bottom: 5px;
-        }
-        
-        .header p {
-          font-size: 11px;
-          color: #666;
+        .summary {
+          background: #f0f0f0;
+          padding: 10px;
+          margin-bottom: 15px;
+          border-radius: 4px;
+          display: none;
         }
         
         .shelf-section {
           margin-bottom: 15px;
+          page-break-after: always;
           page-break-inside: avoid;
+          min-height: 100vh;
+          padding: 20px;
         }
         
         .shelf-header {
           background: #333;
           color: white;
-          padding: 8px 12px;
-          font-size: 14px;
+          padding: 12px 16px;
+          font-size: 28px;
           font-weight: bold;
           border-radius: 4px 4px 0 0;
+          margin-bottom: 20px;
+          text-align: center;
         }
         
         .shelf-content {
@@ -301,6 +304,32 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
         .summary-label {
           font-size: 10px;
           color: #666;
+        }
+        
+        .shelf-summary {
+          background: #f9fafb;
+          padding: 12px;
+          margin-top: 20px;
+          border-top: 2px solid #333;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+        }
+        
+        .shelf-summary-item {
+          text-align: center;
+        }
+        
+        .shelf-summary-value {
+          font-size: 24px;
+          font-weight: bold;
+          color: #000;
+        }
+        
+        .shelf-summary-label {
+          font-size: 11px;
+          color: #666;
+          margin-top: 4px;
         }
       </style>
     `
@@ -421,75 +450,71 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
               {/* Preview */}
               <div className="border rounded-lg p-4 bg-white text-black overflow-auto max-h-[55vh]">
                 <div ref={printRef} className="print-container">
-                  <div className="header">
-                    <h1>{currentWarehouse.name}</h1>
-                    <p>Depo Envanter Raporu - {formatDate()}</p>
-                  </div>
-
-                  <div className="summary">
-                    <div className="summary-item">
-                      <div className="summary-value">{currentLayout?.shelves?.length || 0}</div>
-                      <div className="summary-label">Toplam Raf</div>
-                    </div>
-                    <div className="summary-item">
-                      <div className="summary-value">{getTotalProducts()}</div>
-                      <div className="summary-label">Toplam Ürün</div>
-                    </div>
-                    <div className="summary-item">
-                      <div className="summary-value">{getTotalWeight()} kg</div>
-                      <div className="summary-label">Toplam Agirlik</div>
-                    </div>
-                  </div>
-
                   {shelfProducts.length === 0 ? (
                     <div className="empty-message">Bu depoda henüz ürün bulunmamaktadir.</div>
                   ) : (
-                    shelfProducts.map((sp) => (
-                      <div key={sp.shelf.id} className="shelf-section">
-                        <div className="shelf-header" style={{ backgroundColor: getShelfColor(sp.shelf.id) }}>
-                          {sp.shelf.name || sp.shelf.id} Rafi
-                        </div>
-                        <div className="shelf-content">
-                          {sp.layers.map((layerData) => (
-                            <div key={layerData.layer} className="layer-section">
-                              <div className="layer-header">{layerData.layer}</div>
-                              <table className="products-table">
-                                <thead>
-                                  <tr>
-                                    <th style={{ width: "30%" }}>Ürün Adi</th>
-                                    <th style={{ width: "15%" }}>Kategori</th>
-                                    <th style={{ width: "15%" }}>Ölçü</th>
-                                    <th style={{ width: "12%", textAlign: "right" }}>Kilogram</th>
-                                    <th style={{ width: "28%" }}>Notlar</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {layerData.products.map((product) => (
-                                    <tr key={product.id}>
-                                      <td className="product-name">{product.urunAdi}</td>
-                                      <td>{product.kategori}</td>
-                                      <td>{product.olcu}</td>
-                                      <td className="product-kg">{product.kilogram}</td>
-                                      <td className="product-notes">{product.notlar || "-"}</td>
+                    shelfProducts.map((sp) => {
+                      const layerTotalProducts = sp.layers.reduce((sum, l) => sum + l.products.length, 0)
+                      const layerTotalWeight = sp.layers.reduce(
+                        (sum, l) => sum + l.products.reduce((w, p) => w + (p.kilogram || 0), 0),
+                        0
+                      )
+                      
+                      return (
+                        <div key={sp.shelf.id} className="shelf-section">
+                          <div className="shelf-header" style={{ backgroundColor: getShelfColor(sp.shelf.id) }}>
+                            {sp.shelf.name || sp.shelf.id}. RAF
+                          </div>
+                          <div className="shelf-content">
+                            {sp.layers.map((layerData) => (
+                              <div key={layerData.layer} className="layer-section">
+                                <div className="layer-header">{layerData.layer}</div>
+                                <table className="products-table">
+                                  <thead>
+                                    <tr>
+                                      <th style={{ width: "30%" }}>Ürün Adi</th>
+                                      <th style={{ width: "15%" }}>Kategori</th>
+                                      <th style={{ width: "15%" }}>Ölçü</th>
+                                      <th style={{ width: "12%", textAlign: "right" }}>Kilogram</th>
+                                      <th style={{ width: "28%" }}>Notlar</th>
                                     </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                                  </thead>
+                                  <tbody>
+                                    {layerData.products.map((product) => (
+                                      <tr key={product.id}>
+                                        <td className="product-name">{product.urunAdi}</td>
+                                        <td>{product.kategori}</td>
+                                        <td>{product.olcu}</td>
+                                        <td className="product-kg">{product.kilogram}</td>
+                                        <td className="product-notes">{product.notlar || "-"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Her raf için özet */}
+                          <div className="shelf-summary">
+                            <div className="shelf-summary-item">
+                              <div className="shelf-summary-value">{layerTotalProducts}</div>
+                              <div className="shelf-summary-label">Toplam Ürün</div>
                             </div>
-                          ))}
+                            <div className="shelf-summary-item">
+                              <div className="shelf-summary-value">{layerTotalWeight.toFixed(2)} kg</div>
+                              <div className="shelf-summary-label">Toplam Ağırlık</div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      )
+                    })
                   )}
-
-                  <div className="footer">
-                    Depo Envanter Yönetim Sistemi | {formatDate()}
-                  </div>
                 </div>
               </div>
 
               <p className="text-sm text-muted-foreground mt-4 text-center">
-                "Yazdir / PDF" butonuna tiklayarak bu raporu yazdirabilir veya PDF olarak kaydedebilirsiniz.
+                "Yazdir / PDF" butonuna tiklayarak raflari ayrı sayfalar halinde yazdirabilir veya PDF olarak kaydedebilirsiniz.
               </p>
             </div>
           )}
