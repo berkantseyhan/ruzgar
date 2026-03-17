@@ -203,7 +203,6 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
                       style={{
                         pageBreakAfter: "always",
                         padding: "20px 25px",
-                        minHeight: "297mm",
                         display: "flex",
                         flexDirection: "column",
                       }}
