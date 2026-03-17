@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/lib/theme-context"
 import { AuthProvider } from "@/lib/auth-context"
 import { WarehouseProvider } from "@/lib/warehouse-context"
 import { Toaster } from "@/components/ui/toaster"
+import { CriticalStyles } from "./critical-styles"
 
 export const metadata: Metadata = {
   title: "Depo Envanter Yönetim Sistemi",
@@ -19,6 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr" suppressHydrationWarning>
+      <head>
+        <CriticalStyles />
+      </head>
       <body className="min-h-screen bg-background text-foreground font-sans antialiased">
         <ThemeProvider>
           <AuthProvider>
