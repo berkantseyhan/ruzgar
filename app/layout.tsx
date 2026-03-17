@@ -113,10 +113,36 @@ export default function RootLayout({
           .font-semibold { font-weight: 600; }
           .font-bold { font-weight: 700; }
           
+          /* Position */
+          .absolute { position: absolute; }
+          .relative { position: relative; }
+          .static { position: static; }
+          
+          /* Aspect Ratio */
+          .aspect-\[5\/3\] { aspect-ratio: 5 / 3; }
+          .aspect-square { aspect-ratio: 1; }
+          .aspect-video { aspect-ratio: 16 / 9; }
+          
+          /* Max Width */
+          .max-w-5xl { max-width: 64rem; }
+          .max-w-4xl { max-width: 56rem; }
+          .max-w-3xl { max-width: 48rem; }
+          .max-w-full { max-width: 100%; }
+          
+          /* Overflow */
+          .overflow-hidden { overflow: hidden; }
+          .overflow-auto { overflow: auto; }
+          
+          /* Position specific */
+          .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+          
           /* Display */
+          .hidden { display: none; }
           .block { display: block; }
           .inline-block { display: inline-block; }
           .inline-flex { display: inline-flex; }
+          .absolute { position: absolute; }
+          .relative { position: relative; }
           .hidden { display: none; }
           
           /* Width/Height */
