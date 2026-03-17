@@ -210,13 +210,13 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
                     >
                       {/* Header */}
                       <div style={{ textAlign: "center", marginBottom: "12px" }}>
-                        <p style={{ fontSize: "12px", color: "#666", margin: "0 0 6px 0" }}>
+                        <p style={{ fontSize: "12px", color: "#000", margin: "0 0 6px 0" }}>
                           {currentWarehouse?.name || "Depo"}
                         </p>
                         <h1 style={{ fontSize: "48px", fontWeight: "bold", margin: "0", color: "#000" }}>
                           {sp.shelf.name || sp.shelf.id}
                         </h1>
-                        <p style={{ fontSize: "12px", color: "#666", margin: "6px 0 0 0" }}>
+                        <p style={{ fontSize: "12px", color: "#000", margin: "6px 0 0 0" }}>
                           {sp.layers.length} katman
                         </p>
                       </div>
@@ -246,13 +246,13 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
                           <p style={{ fontSize: "28px", fontWeight: "bold", margin: "0", color: "#000" }}>
                             {totalProducts}
                           </p>
-                          <p style={{ fontSize: "11px", color: "#ff6b35", margin: "3px 0 0 0" }}>Toplam Ürün</p>
+                          <p style={{ fontSize: "11px", color: "#000", margin: "3px 0 0 0" }}>Toplam Ürün</p>
                         </div>
                         <div>
                           <p style={{ fontSize: "28px", fontWeight: "bold", margin: "0", color: "#000" }}>
                             {totalWeight.toFixed(0)}
                           </p>
-                          <p style={{ fontSize: "11px", color: "#ff6b35", margin: "3px 0 0 0" }}>Toplam Kilogram</p>
+                          <p style={{ fontSize: "11px", color: "#000", margin: "3px 0 0 0" }}>Toplam Kilogram</p>
                         </div>
                       </div>
 
@@ -269,6 +269,7 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
                                 fontSize: "11px",
                                 marginBottom: "8px",
                                 textTransform: "lowercase",
+                                color: "#000",
                               }}
                             >
                               {layerData.layer}
@@ -295,7 +296,7 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
                                     <p
                                       style={{
                                         fontSize: "10px",
-                                        color: "#666",
+                                        color: "#000",
                                         margin: "0",
                                       }}
                                     >
@@ -306,23 +307,23 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
                                       {product.kilogram} kg
                                     </p>
                                     {product.notlar && (
-                                      <p style={{ fontSize: "9px", color: "#999", margin: "2px 0 0 0", fontStyle: "italic" }}>
+                                      <p style={{ fontSize: "9px", color: "#000", margin: "2px 0 0 0", fontStyle: "italic" }}>
                                         {product.notlar}
                                       </p>
                                     )}
                                   </div>
-                                  <div
-                                    style={{
-                                      fontSize: "12px",
-                                      fontWeight: "bold",
-                                      color: "#004a7f",
-                                      marginLeft: "12px",
-                                      minWidth: "50px",
-                                      textAlign: "right",
-                                    }}
-                                  >
-                                    {product.kilogram} kg
-                                  </div>
+                                    <div
+                                      style={{
+                                        fontSize: "12px",
+                                        fontWeight: "bold",
+                                        color: "#000",
+                                        marginLeft: "12px",
+                                        minWidth: "50px",
+                                        textAlign: "right",
+                                      }}
+                                    >
+                                      {product.kilogram} kg
+                                    </div>
                                 </div>
                               ))}
                             </div>
@@ -333,12 +334,12 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
                       {/* Footer */}
                       <div
                         style={{
-                          marginTop: "15px",
-                          paddingTop: "10px",
+                          marginTop: "auto",
+                          paddingTop: "8px",
                           borderTop: "1px solid #ddd",
                           textAlign: "center",
                           fontSize: "9px",
-                          color: "#999",
+                          color: "#000",
                         }}
                       >
                         Yazdırma Tarihi: {formatDate()}
