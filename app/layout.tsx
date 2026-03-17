@@ -7,12 +7,15 @@ import { AuthProvider } from "@/lib/auth-context"
 import { WarehouseProvider } from "@/lib/warehouse-context"
 import { Toaster } from "@/components/ui/toaster"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({ 
+  subsets: ["latin"],
+  variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
   title: "Depo Envanter Yönetim Sistemi",
   description: "Modern depo envanter yönetim uygulaması",
-    generator: 'v0.app'
+  generator: 'v0.app'
 }
 
 export default function RootLayout({
@@ -21,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="tr" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-screen bg-background text-foreground`}>
+    <html lang="tr" suppressHydrationWarning className={inter.variable}>
+      <body className="min-h-screen bg-background text-foreground font-sans antialiased">
         <ThemeProvider>
           <AuthProvider>
             <WarehouseProvider>
