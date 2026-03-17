@@ -9,7 +9,7 @@ import ConfirmDialog from "@/components/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import { Save, Lock, Unlock, Grid, Plus, Trash2, Edit3, Check, X, Layers, RotateCw } from "lucide-react"
+import { Save, Lock, Unlock, Grid, Plus, Trash2, Edit3, Check, X, Layers, RotateCw, Printer } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
@@ -721,6 +721,259 @@ export default function DraggableWarehouseMap() {
     }
   }
 
+  const handlePrintPDF = async () => {
+    if (!layout || !currentWarehouse) return
+
+    try {
+      toast({
+        title: "Hazırlanıyor",
+        description: "PDF için ürün bilgileri yükleniyor...",
+      })
+
+      // Fetch products for each shelf
+      const shelfProducts: Record<string, any[]> = {}
+      
+      for (const shelf of layout.shelves) {
+        try {
+          const response = await fetch(`/api/products?warehouse_id=${currentWarehouse.id}&shelf_id=${shelf.id}`)
+          if (response.ok) {
+            const data = await response.json()
+            shelfProducts[shelf.id] = data.products || []
+          } else {
+            shelfProducts[shelf.id] = []
+          }
+        } catch (error) {
+          console.error(`Error fetching products for shelf ${shelf.id}:`, error)
+          shelfProducts[shelf.id] = []
+        }
+      }
+
+      // Create print window
+      const printWindow = window.open('', '_blank')
+      if (!printWindow) {
+        toast({
+          title: "Hata",
+          description: "Popup engelleyici aktif olabilir. Lütfen izin verin.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Generate HTML content for printing
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${currentWarehouse.name} - Raf Listesi</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              font-size: 12px;
+              line-height: 1.4;
+            }
+            .page {
+              page-break-after: always;
+              padding: 15mm;
+              min-height: 100vh;
+            }
+            .page:last-child {
+              page-break-after: auto;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 3px solid #333;
+              padding-bottom: 10px;
+              margin-bottom: 15px;
+            }
+            .warehouse-name {
+              font-size: 14px;
+              color: #666;
+              margin-bottom: 5px;
+            }
+            .shelf-name {
+              font-size: 32px;
+              font-weight: bold;
+              color: #000;
+            }
+            .shelf-info {
+              font-size: 11px;
+              color: #888;
+              margin-top: 5px;
+            }
+            .layer-section {
+              margin-bottom: 15px;
+              border: 1px solid #ddd;
+              border-radius: 5px;
+              overflow: hidden;
+            }
+            .layer-header {
+              background: #f5f5f5;
+              padding: 8px 12px;
+              font-weight: bold;
+              font-size: 14px;
+              border-bottom: 1px solid #ddd;
+            }
+            .product-list {
+              padding: 10px;
+            }
+            .product-item {
+              display: flex;
+              justify-content: space-between;
+              padding: 6px 8px;
+              border-bottom: 1px solid #eee;
+              align-items: center;
+            }
+            .product-item:last-child {
+              border-bottom: none;
+            }
+            .product-name {
+              font-weight: 500;
+              font-size: 13px;
+            }
+            .product-details {
+              color: #666;
+              font-size: 11px;
+            }
+            .product-quantity {
+              background: #e3f2fd;
+              padding: 3px 8px;
+              border-radius: 10px;
+              font-weight: bold;
+              font-size: 11px;
+            }
+            .empty-layer {
+              text-align: center;
+              padding: 15px;
+              color: #999;
+              font-style: italic;
+            }
+            .footer {
+              margin-top: 20px;
+              text-align: center;
+              font-size: 10px;
+              color: #999;
+              border-top: 1px solid #ddd;
+              padding-top: 10px;
+            }
+            .summary {
+              background: #f9f9f9;
+              padding: 10px;
+              border-radius: 5px;
+              margin-bottom: 15px;
+              display: flex;
+              justify-content: space-around;
+              text-align: center;
+            }
+            .summary-item {
+              padding: 5px 15px;
+            }
+            .summary-value {
+              font-size: 20px;
+              font-weight: bold;
+              color: #333;
+            }
+            .summary-label {
+              font-size: 10px;
+              color: #666;
+            }
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
+          </style>
+        </head>
+        <body>
+          ${layout.shelves.map((shelf) => {
+            const products = shelfProducts[shelf.id] || []
+            const layers = shelf.customLayers || ['üst kat', 'orta kat', 'alt kat']
+            const shelfDisplayName = shelf.name && shelf.name.trim() !== '' ? shelf.name : shelf.id
+            
+            // Group products by layer
+            const productsByLayer: Record<string, any[]> = {}
+            layers.forEach(layer => {
+              productsByLayer[layer] = products.filter(p => p.layer === layer)
+            })
+            
+            const totalProducts = products.length
+            const totalQuantity = products.reduce((sum, p) => sum + (p.quantity || 0), 0)
+            
+            return `
+              <div class="page">
+                <div class="header">
+                  <div class="warehouse-name">${currentWarehouse.name}</div>
+                  <div class="shelf-name">${shelfDisplayName}</div>
+                  <div class="shelf-info">${layers.length} katman</div>
+                </div>
+                
+                <div class="summary">
+                  <div class="summary-item">
+                    <div class="summary-value">${totalProducts}</div>
+                    <div class="summary-label">Toplam Ürün</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-value">${totalQuantity}</div>
+                    <div class="summary-label">Toplam Adet</div>
+                  </div>
+                </div>
+                
+                ${layers.map(layer => `
+                  <div class="layer-section">
+                    <div class="layer-header">${layer}</div>
+                    <div class="product-list">
+                      ${productsByLayer[layer].length > 0 
+                        ? productsByLayer[layer].map(product => `
+                            <div class="product-item">
+                              <div>
+                                <div class="product-name">${product.name}</div>
+                                <div class="product-details">
+                                  ${product.category || ''} ${product.size ? '• ' + product.size : ''} ${product.weight ? '• ' + product.weight + ' kg' : ''}
+                                </div>
+                              </div>
+                              <div class="product-quantity">${product.quantity || 0} adet</div>
+                            </div>
+                          `).join('')
+                        : '<div class="empty-layer">Bu katmanda ürün yok</div>'
+                      }
+                    </div>
+                  </div>
+                `).join('')}
+                
+                <div class="footer">
+                  Yazdırma Tarihi: ${new Date().toLocaleDateString('tr-TR')} ${new Date().toLocaleTimeString('tr-TR')}
+                </div>
+              </div>
+            `
+          }).join('')}
+        </body>
+        </html>
+      `
+
+      printWindow.document.write(htmlContent)
+      printWindow.document.close()
+      
+      // Wait for content to load then print
+      printWindow.onload = () => {
+        printWindow.print()
+      }
+
+      toast({
+        title: "Hazır",
+        description: "PDF yazdırma penceresi açıldı.",
+      })
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      toast({
+        title: "Hata",
+        description: "PDF oluşturulurken bir hata oluştu.",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleResetLayout = async () => {
     if (!currentWarehouse) {
       console.log("❌ No current warehouse selected for reset")
@@ -908,6 +1161,17 @@ export default function DraggableWarehouseMap() {
           <Badge variant={isEditMode ? "default" : "outline"} className="mr-2">
             {isEditMode ? "Düzenleme Modu" : "Görüntüleme Modu"}
           </Badge>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrintPDF}
+            className="flex items-center gap-2"
+            title="Rafları PDF olarak yazdır"
+          >
+            <Printer className="h-4 w-4" />
+            PDF Yazdır
+          </Button>
 
           <Button
             variant="outline"
