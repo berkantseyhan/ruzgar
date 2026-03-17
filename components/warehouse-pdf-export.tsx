@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Printer, FileText } from "lucide-react"
+import { Loader2, Printer } from "lucide-react"
 import type { Product, ShelfLayout, WarehouseLayout, Warehouse, Layer } from "@/lib/database"
 import { getAvailableLayersForShelf } from "@/lib/database"
 import { useWarehouse } from "@/lib/warehouse-context"
@@ -31,7 +31,6 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
   const [currentLayout, setCurrentLayout] = useState<WarehouseLayout | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
-  // Set initial warehouse when dialog opens
   useEffect(() => {
     if (isOpen && selectedWarehouse) {
       setSelectedWarehouseId(selectedWarehouse.id)
@@ -40,25 +39,22 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
     }
   }, [isOpen, selectedWarehouse, activeLayout])
 
-  // Load warehouse data when selection changes
   useEffect(() => {
     const loadWarehouseData = async () => {
       if (!selectedWarehouseId || !isOpen) return
 
-      const warehouse = warehouses.find(w => w.id === selectedWarehouseId)
+      const warehouse = warehouses.find((w) => w.id === selectedWarehouseId)
       if (!warehouse) return
 
       setCurrentWarehouse(warehouse)
       setLoading(true)
 
       try {
-        // Fetch layout for this warehouse
         const layoutResponse = await fetch(`/api/layout?warehouse_id=${selectedWarehouseId}`)
         if (layoutResponse.ok) {
           const layoutData = await layoutResponse.json()
           setCurrentLayout(layoutData.layout)
-          
-          // Now fetch products for each shelf
+
           if (layoutData.layout?.shelves?.length > 0) {
             await fetchAllProducts(warehouse, layoutData.layout)
           } else {
@@ -104,24 +100,21 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
 
             if (response.ok) {
               const data = await response.json()
-              if (data.products && data.products.length > 0) {
-                layerProducts.push({
-                  layer: layer as Layer,
-                  products: data.products,
-                })
-              }
+              layerProducts.push({
+                layer,
+                products: Array.isArray(data) ? data : data.products || [],
+              })
             }
           } catch (error) {
-            console.error(`Error fetching products for shelf ${shelf.id}, layer ${layer}:`, error)
+            console.error(`Error fetching products for layer ${layer}:`, error)
+            layerProducts.push({ layer, products: [] })
           }
         }
 
-        if (layerProducts.length > 0) {
-          results.push({
-            shelf,
-            layers: layerProducts,
-          })
-        }
+        results.push({
+          shelf,
+          layers: layerProducts,
+        })
       }
 
       setShelfProducts(results)
@@ -132,392 +125,234 @@ export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps)
   }
 
   const handlePrint = () => {
-    const printContent = printRef.current
-    if (!printContent) return
-
+    if (!printRef.current) return
     const printWindow = window.open("", "_blank")
-    if (!printWindow) {
-      alert("Lutfen popup engelleyiciyi devre disi birakin")
-      return
-    }
-
-    const styles = `
-      <style>
-        @media print {
-          @page {
-            size: A4;
-            margin: 10mm;
-          }
-        }
-        
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-        }
-        
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          font-size: 11px;
-          line-height: 1.3;
-          color: #000;
-          background: #fff;
-        }
-        
-        .print-container {
-          padding: 10px;
-        }
-        
-        .header {
-          text-align: center;
-          border-bottom: 2px solid #333;
-          padding-bottom: 10px;
-          margin-bottom: 15px;
-          display: none;
-        }
-        
-        .summary {
-          background: #f0f0f0;
-          padding: 10px;
-          margin-bottom: 15px;
-          border-radius: 4px;
-          display: none;
-        }
-        
-        .shelf-section {
-          margin-bottom: 15px;
-          page-break-after: always;
-          page-break-inside: avoid;
-          min-height: 100vh;
-          padding: 20px;
-        }
-        
-        .shelf-header {
-          background: #333;
-          color: white;
-          padding: 12px 16px;
-          font-size: 28px;
-          font-weight: bold;
-          border-radius: 4px 4px 0 0;
-          margin-bottom: 20px;
-          text-align: center;
-        }
-        
-        .shelf-content {
-          border: 1px solid #ddd;
-          border-top: none;
-          border-radius: 0 0 4px 4px;
-        }
-        
-        .layer-section {
-          border-bottom: 1px solid #eee;
-        }
-        
-        .layer-section:last-child {
-          border-bottom: none;
-        }
-        
-        .layer-header {
-          background: #f5f5f5;
-          padding: 6px 12px;
-          font-weight: 600;
-          font-size: 12px;
-          border-bottom: 1px solid #eee;
-        }
-        
-        .products-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        
-        .products-table th,
-        .products-table td {
-          padding: 5px 8px;
-          text-align: left;
-          border-bottom: 1px solid #eee;
-          font-size: 10px;
-        }
-        
-        .products-table th {
-          background: #fafafa;
-          font-weight: 600;
-          font-size: 9px;
-          text-transform: uppercase;
-          color: #666;
-        }
-        
-        .products-table tr:last-child td {
-          border-bottom: none;
-        }
-        
-        .product-name {
-          font-weight: 500;
-        }
-        
-        .product-kg {
-          font-family: monospace;
-          text-align: right;
-        }
-        
-        .product-notes {
-          color: #666;
-          font-size: 9px;
-          max-width: 150px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        
-        .footer {
-          margin-top: 20px;
-          padding-top: 10px;
-          border-top: 1px solid #ddd;
-          text-align: center;
-          font-size: 9px;
-          color: #999;
-        }
-        
-        .empty-message {
-          padding: 20px;
-          text-align: center;
-          color: #666;
-        }
-        
-        .summary {
-          background: #f0f0f0;
-          padding: 10px;
-          margin-bottom: 15px;
-          border-radius: 4px;
-          display: flex;
-          justify-content: space-around;
-        }
-        
-        .summary-item {
-          text-align: center;
-        }
-        
-        .summary-value {
-          font-size: 18px;
-          font-weight: bold;
-        }
-        
-        .summary-label {
-          font-size: 10px;
-          color: #666;
-        }
-        
-        .shelf-summary {
-          background: #f9fafb;
-          padding: 12px;
-          margin-top: 20px;
-          border-top: 2px solid #333;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-        }
-        
-        .shelf-summary-item {
-          text-align: center;
-        }
-        
-        .shelf-summary-value {
-          font-size: 24px;
-          font-weight: bold;
-          color: #000;
-        }
-        
-        .shelf-summary-label {
-          font-size: 11px;
-          color: #666;
-          margin-top: 4px;
-        }
-      </style>
-    `
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${currentWarehouse?.name || 'Depo'} - Depo Raporu</title>
-          ${styles}
-        </head>
-        <body>
-          ${printContent.innerHTML}
-        </body>
-      </html>
-    `)
-
-    printWindow.document.close()
-
-    setTimeout(() => {
+    if (printWindow) {
+      printWindow.document.write(printRef.current.innerHTML)
+      printWindow.document.close()
       printWindow.print()
-    }, 250)
-  }
-
-  const getTotalProducts = () => {
-    return shelfProducts.reduce(
-      (total, sp) => total + sp.layers.reduce((layerTotal, l) => layerTotal + l.products.length, 0),
-      0
-    )
-  }
-
-  const getTotalWeight = () => {
-    return shelfProducts
-      .reduce(
-        (total, sp) =>
-          total + sp.layers.reduce((layerTotal, l) => layerTotal + l.products.reduce((w, p) => w + (p.kilogram || 0), 0), 0),
-        0
-      )
-      .toFixed(2)
-  }
-
-  const getShelfColor = (shelfId: string) => {
-    switch (shelfId) {
-      case "A":
-        return "#3b82f6"
-      case "B":
-        return "#22c55e"
-      case "C":
-        return "#f59e0b"
-      case "D":
-        return "#ef4444"
-      case "E":
-        return "#8b5cf6"
-      case "F":
-        return "#06b6d4"
-      case "G":
-        return "#ec4899"
-      default:
-        return "#6b7280"
     }
   }
 
   const formatDate = () => {
-    return new Date().toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+    const now = new Date()
+    return now.toLocaleString("tr-TR")
   }
 
-  if (!isOpen) return null
-
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="border-b pb-4">
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            Raf Etiketi Yazdır
-          </DialogTitle>
+        <DialogHeader>
+          <DialogTitle>Raf Etiketlerini Yazdır</DialogTitle>
         </DialogHeader>
 
-        <div className="py-4">
+        <div className="space-y-4">
           {/* Warehouse Selection */}
-          <div className="flex items-center gap-4 mb-6">
-            <label className="text-sm font-medium whitespace-nowrap">Depo Seçin:</label>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Depo Seçin</label>
             <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-              <SelectTrigger className="w-[250px]">
-                <SelectValue placeholder="Depo seçin..." />
+              <SelectTrigger>
+                <SelectValue placeholder="Depo seçiniz..." />
               </SelectTrigger>
               <SelectContent>
-                {warehouses.map((warehouse) => (
-                  <SelectItem key={warehouse.id} value={warehouse.id}>
-                    {warehouse.name}
+                {warehouses.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handlePrint} disabled={loading || !currentWarehouse} className="flex items-center gap-2 ml-auto">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-              Yazdir / PDF
+          </div>
+
+          {/* Print Button */}
+          <div className="flex gap-2">
+            <Button onClick={handlePrint} disabled={loading || shelfProducts.length === 0} className="gap-2">
+              <Printer className="h-4 w-4" />
+              Yazdır / PDF
             </Button>
           </div>
 
-          {loading || warehouseLoading ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <Loader2 className="h-10 w-10 animate-spin text-primary" />
-              <p className="text-muted-foreground">Ürünler yükleniyor...</p>
-            </div>
-          ) : !currentWarehouse ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Lütfen bir depo seçin
+          {/* Preview */}
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span className="ml-2">Yükleniyor...</span>
             </div>
           ) : (
-            <div>
-              {/* Preview */}
-              <div className="border rounded-lg p-4 bg-white text-black overflow-auto max-h-[55vh]">
-                <div ref={printRef} className="print-container">
-                  {shelfProducts.length === 0 ? (
-                    <div className="empty-message">Bu depoda henüz ürün bulunmamaktadir.</div>
-                  ) : (
-                    shelfProducts.map((sp) => {
-                      const layerTotalProducts = sp.layers.reduce((sum, l) => sum + l.products.length, 0)
-                      const layerTotalWeight = sp.layers.reduce(
-                        (sum, l) => sum + l.products.reduce((w, p) => w + (p.kilogram || 0), 0),
-                        0
-                      )
-                      
-                      return (
-                        <div key={sp.shelf.id} className="shelf-section">
-                          <div className="shelf-header" style={{ backgroundColor: getShelfColor(sp.shelf.id) }}>
-                            {sp.shelf.name || sp.shelf.id}. RAF
-                          </div>
-                          <div className="shelf-content">
-                            {sp.layers.map((layerData) => (
-                              <div key={layerData.layer} className="layer-section">
-                                <div className="layer-header">{layerData.layer}</div>
-                                <table className="products-table">
-                                  <thead>
-                                    <tr>
-                                      <th style={{ width: "30%" }}>Ürün Adi</th>
-                                      <th style={{ width: "15%" }}>Kategori</th>
-                                      <th style={{ width: "15%" }}>Ölçü</th>
-                                      <th style={{ width: "12%", textAlign: "right" }}>Kilogram</th>
-                                      <th style={{ width: "28%" }}>Notlar</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {layerData.products.map((product) => (
-                                      <tr key={product.id}>
-                                        <td className="product-name">{product.urunAdi}</td>
-                                        <td>{product.kategori}</td>
-                                        <td>{product.olcu}</td>
-                                        <td className="product-kg">{product.kilogram}</td>
-                                        <td className="product-notes">{product.notlar || "-"}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            ))}
-                          </div>
-                          
-                          {/* Her raf için özet */}
-                          <div className="shelf-summary">
-                            <div className="shelf-summary-item">
-                              <div className="shelf-summary-value">{layerTotalProducts}</div>
-                              <div className="shelf-summary-label">Toplam Ürün</div>
-                            </div>
-                            <div className="shelf-summary-item">
-                              <div className="shelf-summary-value">{layerTotalWeight.toFixed(2)} kg</div>
-                              <div className="shelf-summary-label">Toplam Ağırlık</div>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
+            <div
+              ref={printRef}
+              className="bg-white text-black"
+              style={{
+                width: "210mm",
+                margin: "0 auto",
+              }}
+            >
+              {shelfProducts.length === 0 ? (
+                <div className="p-8 text-center">Bu depoda raf bulunmamaktadır.</div>
+              ) : (
+                shelfProducts.map((sp, shelfIndex) => {
+                  const totalProducts = sp.layers.reduce((sum, l) => sum + l.products.length, 0)
+                  const totalWeight = sp.layers.reduce(
+                    (sum, l) => sum + l.products.reduce((w, p) => w + (p.kilogram || 0), 0),
+                    0
+                  )
 
-              <p className="text-sm text-muted-foreground mt-4 text-center">
-                "Yazdir / PDF" butonuna tiklayarak raflari ayrı sayfalar halinde yazdirabilir veya PDF olarak kaydedebilirsiniz.
-              </p>
+                  return (
+                    <div
+                      key={sp.shelf.id}
+                      style={{
+                        pageBreakAfter: "always",
+                        padding: "40px",
+                        minHeight: "297mm",
+                        display: "flex",
+                        flexDirection: "column",
+                      }}
+                    >
+                      {/* Header */}
+                      <div style={{ textAlign: "center", marginBottom: "30px" }}>
+                        <p style={{ fontSize: "14px", color: "#666", margin: "0 0 10px 0" }}>
+                          {currentWarehouse?.name || "Depo"}
+                        </p>
+                        <h1 style={{ fontSize: "60px", fontWeight: "bold", margin: "0", color: "#000" }}>
+                          {sp.shelf.name || sp.shelf.id}
+                        </h1>
+                        <p style={{ fontSize: "14px", color: "#666", margin: "10px 0 0 0" }}>
+                          {sp.layers.length} katman
+                        </p>
+                      </div>
+
+                      {/* Divider Line */}
+                      <div
+                        style={{
+                          height: "3px",
+                          backgroundColor: "#000",
+                          marginBottom: "30px",
+                        }}
+                      />
+
+                      {/* Summary Stats */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "40px",
+                          marginBottom: "30px",
+                          backgroundColor: "#f5f5f5",
+                          padding: "20px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div>
+                          <p style={{ fontSize: "32px", fontWeight: "bold", margin: "0", color: "#000" }}>
+                            {totalProducts}
+                          </p>
+                          <p style={{ fontSize: "12px", color: "#ff6b35", margin: "5px 0 0 0" }}>Toplam Ürün</p>
+                        </div>
+                        <div>
+                          <p style={{ fontSize: "32px", fontWeight: "bold", margin: "0", color: "#000" }}>
+                            {totalWeight.toFixed(0)}
+                          </p>
+                          <p style={{ fontSize: "12px", color: "#ff6b35", margin: "5px 0 0 0" }}>Toplam Kilogram</p>
+                        </div>
+                      </div>
+
+                      {/* Layers */}
+                      <div style={{ flex: 1 }}>
+                        {sp.layers.map((layerData) => (
+                          <div key={layerData.layer} style={{ marginBottom: "25px" }}>
+                            {/* Layer Header */}
+                            <div
+                              style={{
+                                backgroundColor: "#e8e8e8",
+                                padding: "10px 12px",
+                                fontWeight: "bold",
+                                fontSize: "12px",
+                                marginBottom: "12px",
+                                textTransform: "lowercase",
+                              }}
+                            >
+                              {layerData.layer}
+                            </div>
+
+                            {/* Products */}
+                            <div style={{ border: "1px solid #ddd", borderRadius: "4px", overflow: "hidden" }}>
+                              {layerData.products.map((product, idx) => (
+                                <div
+                                  key={product.id}
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "flex-start",
+                                    padding: "12px",
+                                    borderBottom: idx < layerData.products.length - 1 ? "1px solid #eee" : "none",
+                                    backgroundColor: idx % 2 === 0 ? "#fff" : "#fafafa",
+                                  }}
+                                >
+                                  <div style={{ flex: 1 }}>
+                                    <p style={{ fontSize: "13px", fontWeight: "bold", margin: "0 0 4px 0", color: "#000" }}>
+                                      {product.urunAdi}
+                                    </p>
+                                    <p
+                                      style={{
+                                        fontSize: "11px",
+                                        color: "#666",
+                                        margin: "0",
+                                      }}
+                                    >
+                                      {product.kategori}
+                                      {product.kategori && product.olcu ? " • " : ""}
+                                      {product.olcu}
+                                      {(product.kategori || product.olcu) && product.kilogram ? " • " : ""}
+                                      {product.kilogram} kg
+                                    </p>
+                                    {product.notlar && (
+                                      <p style={{ fontSize: "10px", color: "#999", margin: "3px 0 0 0", fontStyle: "italic" }}>
+                                        {product.notlar}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "14px",
+                                      fontWeight: "bold",
+                                      color: "#004a7f",
+                                      marginLeft: "20px",
+                                      minWidth: "70px",
+                                      textAlign: "right",
+                                    }}
+                                  >
+                                    {product.kilogram} kg
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Footer */}
+                      <div
+                        style={{
+                          marginTop: "40px",
+                          paddingTop: "15px",
+                          borderTop: "1px solid #ddd",
+                          textAlign: "center",
+                          fontSize: "10px",
+                          color: "#999",
+                        }}
+                      >
+                        Yazdırma Tarihi: {formatDate()}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
           )}
+
+          <p className="text-sm text-muted-foreground text-center">
+            "Yazdır / PDF" butonuna tıklayarak her rafı ayrı sayfa halinde yazdırabilir veya PDF olarak kaydedebilirsiniz.
+          </p>
         </div>
       </DialogContent>
     </Dialog>
