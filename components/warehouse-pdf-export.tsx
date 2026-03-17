@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Printer, X, FileText, Download } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2, Printer, FileText } from "lucide-react"
 import type { Product, ShelfLayout, WarehouseLayout, Warehouse, Layer } from "@/lib/database"
 import { getAvailableLayersForShelf } from "@/lib/database"
+import { useWarehouse } from "@/lib/warehouse-context"
 
 interface WarehousePdfExportProps {
-  warehouse: Warehouse
-  layout: WarehouseLayout | null
+  isOpen: boolean
   onClose: () => void
 }
 
@@ -21,70 +22,114 @@ interface ShelfProducts {
   }[]
 }
 
-export default function WarehousePdfExport({ warehouse, layout, onClose }: WarehousePdfExportProps) {
-  const [loading, setLoading] = useState(true)
+export function WarehousePdfExport({ isOpen, onClose }: WarehousePdfExportProps) {
+  const { warehouses, selectedWarehouse, activeLayout, isLoading: warehouseLoading } = useWarehouse()
+  const [loading, setLoading] = useState(false)
   const [shelfProducts, setShelfProducts] = useState<ShelfProducts[]>([])
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("")
+  const [currentWarehouse, setCurrentWarehouse] = useState<Warehouse | null>(null)
+  const [currentLayout, setCurrentLayout] = useState<WarehouseLayout | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
+  // Set initial warehouse when dialog opens
   useEffect(() => {
-    const fetchAllProducts = async () => {
-      if (!layout || !layout.shelves || layout.shelves.length === 0) {
-        setLoading(false)
-        return
-      }
+    if (isOpen && selectedWarehouse) {
+      setSelectedWarehouseId(selectedWarehouse.id)
+      setCurrentWarehouse(selectedWarehouse)
+      setCurrentLayout(activeLayout)
+    }
+  }, [isOpen, selectedWarehouse, activeLayout])
+
+  // Load warehouse data when selection changes
+  useEffect(() => {
+    const loadWarehouseData = async () => {
+      if (!selectedWarehouseId || !isOpen) return
+
+      const warehouse = warehouses.find(w => w.id === selectedWarehouseId)
+      if (!warehouse) return
+
+      setCurrentWarehouse(warehouse)
+      setLoading(true)
 
       try {
-        const results: ShelfProducts[] = []
-
-        for (const shelf of layout.shelves) {
-          const layers = getAvailableLayersForShelf(shelf.id, layout)
-          const layerProducts: { layer: Layer; products: Product[] }[] = []
-
-          for (const layer of layers) {
-            try {
-              const response = await fetch(
-                `/api/products?shelfId=${encodeURIComponent(shelf.id)}&layer=${encodeURIComponent(layer)}&warehouse_id=${warehouse.id}`,
-                {
-                  method: "GET",
-                  headers: {
-                    "Cache-Control": "no-cache",
-                    "Content-Type": "application/json",
-                  },
-                }
-              )
-
-              if (response.ok) {
-                const data = await response.json()
-                if (data.products && data.products.length > 0) {
-                  layerProducts.push({
-                    layer: layer as Layer,
-                    products: data.products,
-                  })
-                }
-              }
-            } catch (error) {
-              console.error(`Error fetching products for shelf ${shelf.id}, layer ${layer}:`, error)
-            }
-          }
-
-          if (layerProducts.length > 0) {
-            results.push({
-              shelf,
-              layers: layerProducts,
-            })
+        // Fetch layout for this warehouse
+        const layoutResponse = await fetch(`/api/layout?warehouse_id=${selectedWarehouseId}`)
+        if (layoutResponse.ok) {
+          const layoutData = await layoutResponse.json()
+          setCurrentLayout(layoutData.layout)
+          
+          // Now fetch products for each shelf
+          if (layoutData.layout?.shelves?.length > 0) {
+            await fetchAllProducts(warehouse, layoutData.layout)
+          } else {
+            setShelfProducts([])
           }
         }
-
-        setShelfProducts(results)
       } catch (error) {
-        console.error("Error fetching all products:", error)
+        console.error("Error loading warehouse data:", error)
+        setShelfProducts([])
       } finally {
         setLoading(false)
       }
     }
 
-    fetchAllProducts()
-  }, [warehouse.id, layout])
+    loadWarehouseData()
+  }, [selectedWarehouseId, warehouses, isOpen])
+
+  const fetchAllProducts = async (warehouse: Warehouse, layout: WarehouseLayout) => {
+    if (!layout || !layout.shelves || layout.shelves.length === 0) {
+      setShelfProducts([])
+      return
+    }
+
+    try {
+      const results: ShelfProducts[] = []
+
+      for (const shelf of layout.shelves) {
+        const layers = getAvailableLayersForShelf(shelf.id, layout)
+        const layerProducts: { layer: Layer; products: Product[] }[] = []
+
+        for (const layer of layers) {
+          try {
+            const response = await fetch(
+              `/api/products?shelfId=${encodeURIComponent(shelf.id)}&layer=${encodeURIComponent(layer)}&warehouse_id=${warehouse.id}`,
+              {
+                method: "GET",
+                headers: {
+                  "Cache-Control": "no-cache",
+                  "Content-Type": "application/json",
+                },
+              }
+            )
+
+            if (response.ok) {
+              const data = await response.json()
+              if (data.products && data.products.length > 0) {
+                layerProducts.push({
+                  layer: layer as Layer,
+                  products: data.products,
+                })
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching products for shelf ${shelf.id}, layer ${layer}:`, error)
+          }
+        }
+
+        if (layerProducts.length > 0) {
+          results.push({
+            shelf,
+            layers: layerProducts,
+          })
+        }
+      }
+
+      setShelfProducts(results)
+    } catch (error) {
+      console.error("Error fetching all products:", error)
+      setShelfProducts([])
+    }
+  }
 
   const handlePrint = () => {
     const printContent = printRef.current
@@ -264,7 +309,7 @@ export default function WarehousePdfExport({ warehouse, layout, onClose }: Wareh
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${warehouse.name} - Depo Raporu</title>
+          <title>${currentWarehouse?.name || 'Depo'} - Depo Raporu</title>
           ${styles}
         </head>
         <body>
@@ -328,104 +373,127 @@ export default function WarehousePdfExport({ warehouse, layout, onClose }: Wareh
     })
   }
 
+  if (!isOpen) return null
+
   return (
-    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
+        <DialogHeader className="border-b pb-4">
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
-            {warehouse.name} - PDF Raporu
+            Raf Etiketi Yazdır
           </DialogTitle>
-          <div className="flex gap-2">
-            <Button onClick={handlePrint} disabled={loading} className="flex items-center gap-2">
+        </DialogHeader>
+
+        <div className="py-4">
+          {/* Warehouse Selection */}
+          <div className="flex items-center gap-4 mb-6">
+            <label className="text-sm font-medium whitespace-nowrap">Depo Seçin:</label>
+            <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+              <SelectTrigger className="w-[250px]">
+                <SelectValue placeholder="Depo seçin..." />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map((warehouse) => (
+                  <SelectItem key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={handlePrint} disabled={loading || !currentWarehouse} className="flex items-center gap-2 ml-auto">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
               Yazdir / PDF
             </Button>
           </div>
-        </DialogHeader>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-4">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="text-muted-foreground">Ürünler yükleniyor...</p>
-          </div>
-        ) : (
-          <div className="mt-4">
-            {/* Preview */}
-            <div className="border rounded-lg p-4 bg-white text-black overflow-auto max-h-[60vh]">
-              <div ref={printRef} className="print-container">
-                <div className="header">
-                  <h1>{warehouse.name}</h1>
-                  <p>Depo Envanter Raporu - {formatDate()}</p>
-                </div>
+          {loading || warehouseLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="text-muted-foreground">Ürünler yükleniyor...</p>
+            </div>
+          ) : !currentWarehouse ? (
+            <div className="text-center py-12 text-muted-foreground">
+              Lütfen bir depo seçin
+            </div>
+          ) : (
+            <div>
+              {/* Preview */}
+              <div className="border rounded-lg p-4 bg-white text-black overflow-auto max-h-[55vh]">
+                <div ref={printRef} className="print-container">
+                  <div className="header">
+                    <h1>{currentWarehouse.name}</h1>
+                    <p>Depo Envanter Raporu - {formatDate()}</p>
+                  </div>
 
-                <div className="summary">
-                  <div className="summary-item">
-                    <div className="summary-value">{layout?.shelves?.length || 0}</div>
-                    <div className="summary-label">Toplam Raf</div>
-                  </div>
-                  <div className="summary-item">
-                    <div className="summary-value">{getTotalProducts()}</div>
-                    <div className="summary-label">Toplam Ürün</div>
-                  </div>
-                  <div className="summary-item">
-                    <div className="summary-value">{getTotalWeight()} kg</div>
-                    <div className="summary-label">Toplam Agirlik</div>
-                  </div>
-                </div>
-
-                {shelfProducts.length === 0 ? (
-                  <div className="empty-message">Bu depoda henüz ürün bulunmamaktadir.</div>
-                ) : (
-                  shelfProducts.map((sp) => (
-                    <div key={sp.shelf.id} className="shelf-section">
-                      <div className="shelf-header" style={{ backgroundColor: getShelfColor(sp.shelf.id) }}>
-                        {sp.shelf.name || sp.shelf.id} Rafi
-                      </div>
-                      <div className="shelf-content">
-                        {sp.layers.map((layerData) => (
-                          <div key={layerData.layer} className="layer-section">
-                            <div className="layer-header">{layerData.layer}</div>
-                            <table className="products-table">
-                              <thead>
-                                <tr>
-                                  <th style={{ width: "30%" }}>Ürün Adi</th>
-                                  <th style={{ width: "15%" }}>Kategori</th>
-                                  <th style={{ width: "15%" }}>Ölçü</th>
-                                  <th style={{ width: "12%", textAlign: "right" }}>Kilogram</th>
-                                  <th style={{ width: "28%" }}>Notlar</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {layerData.products.map((product) => (
-                                  <tr key={product.id}>
-                                    <td className="product-name">{product.urunAdi}</td>
-                                    <td>{product.kategori}</td>
-                                    <td>{product.olcu}</td>
-                                    <td className="product-kg">{product.kilogram}</td>
-                                    <td className="product-notes">{product.notlar || "-"}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="summary">
+                    <div className="summary-item">
+                      <div className="summary-value">{currentLayout?.shelves?.length || 0}</div>
+                      <div className="summary-label">Toplam Raf</div>
                     </div>
-                  ))
-                )}
+                    <div className="summary-item">
+                      <div className="summary-value">{getTotalProducts()}</div>
+                      <div className="summary-label">Toplam Ürün</div>
+                    </div>
+                    <div className="summary-item">
+                      <div className="summary-value">{getTotalWeight()} kg</div>
+                      <div className="summary-label">Toplam Agirlik</div>
+                    </div>
+                  </div>
 
-                <div className="footer">
-                  Depo Envanter Yönetim Sistemi | {formatDate()}
+                  {shelfProducts.length === 0 ? (
+                    <div className="empty-message">Bu depoda henüz ürün bulunmamaktadir.</div>
+                  ) : (
+                    shelfProducts.map((sp) => (
+                      <div key={sp.shelf.id} className="shelf-section">
+                        <div className="shelf-header" style={{ backgroundColor: getShelfColor(sp.shelf.id) }}>
+                          {sp.shelf.name || sp.shelf.id} Rafi
+                        </div>
+                        <div className="shelf-content">
+                          {sp.layers.map((layerData) => (
+                            <div key={layerData.layer} className="layer-section">
+                              <div className="layer-header">{layerData.layer}</div>
+                              <table className="products-table">
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: "30%" }}>Ürün Adi</th>
+                                    <th style={{ width: "15%" }}>Kategori</th>
+                                    <th style={{ width: "15%" }}>Ölçü</th>
+                                    <th style={{ width: "12%", textAlign: "right" }}>Kilogram</th>
+                                    <th style={{ width: "28%" }}>Notlar</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {layerData.products.map((product) => (
+                                    <tr key={product.id}>
+                                      <td className="product-name">{product.urunAdi}</td>
+                                      <td>{product.kategori}</td>
+                                      <td>{product.olcu}</td>
+                                      <td className="product-kg">{product.kilogram}</td>
+                                      <td className="product-notes">{product.notlar || "-"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  <div className="footer">
+                    Depo Envanter Yönetim Sistemi | {formatDate()}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <p className="text-sm text-muted-foreground mt-4 text-center">
-              "Yazdir / PDF" butonuna tiklayarak bu raporu yazdirabilir veya PDF olarak kaydedebilirsiniz.
-            </p>
-          </div>
-        )}
+              <p className="text-sm text-muted-foreground mt-4 text-center">
+                "Yazdir / PDF" butonuna tiklayarak bu raporu yazdirabilir veya PDF olarak kaydedebilirsiniz.
+              </p>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   )
