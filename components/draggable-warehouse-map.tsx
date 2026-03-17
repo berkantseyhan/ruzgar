@@ -735,7 +735,7 @@ export default function DraggableWarehouseMap() {
       
       for (const shelf of layout.shelves) {
         try {
-          const response = await fetch(`/api/products?warehouse_id=${currentWarehouse.id}&shelf_id=${shelf.id}`)
+          const response = await fetch(`/api/products?warehouseId=${currentWarehouse.id}`)
           if (response.ok) {
             const data = await response.json()
             shelfProducts[shelf.id] = data.products || []
@@ -892,14 +892,15 @@ export default function DraggableWarehouseMap() {
             const layers = shelf.customLayers || ['üst kat', 'orta kat', 'alt kat']
             const shelfDisplayName = shelf.name && shelf.name.trim() !== '' ? shelf.name : shelf.id
             
-            // Group products by layer
+            // Filter products for this shelf and group by layer
+            const shelfFilteredProducts = products.filter(p => p.rafNo === shelf.id)
             const productsByLayer: Record<string, any[]> = {}
             layers.forEach(layer => {
-              productsByLayer[layer] = products.filter(p => p.layer === layer)
+              productsByLayer[layer] = shelfFilteredProducts.filter(p => p.katman === layer)
             })
             
-            const totalProducts = products.length
-            const totalQuantity = products.reduce((sum, p) => sum + (p.quantity || 0), 0)
+            const totalProducts = shelfFilteredProducts.length
+            const totalQuantity = shelfFilteredProducts.reduce((sum, p) => sum + (p.kilogram || 0), 0)
             
             return `
               <div class="page">
@@ -916,7 +917,7 @@ export default function DraggableWarehouseMap() {
                   </div>
                   <div class="summary-item">
                     <div class="summary-value">${totalQuantity}</div>
-                    <div class="summary-label">Toplam Adet</div>
+                    <div class="summary-label">Toplam Kilogram</div>
                   </div>
                 </div>
                 
@@ -928,12 +929,13 @@ export default function DraggableWarehouseMap() {
                         ? productsByLayer[layer].map(product => `
                             <div class="product-item">
                               <div>
-                                <div class="product-name">${product.name}</div>
+                                <div class="product-name">${product.urunAdi}</div>
                                 <div class="product-details">
-                                  ${product.category || ''} ${product.size ? '• ' + product.size : ''} ${product.weight ? '• ' + product.weight + ' kg' : ''}
+                                  ${product.kategori || ''} ${product.olcu ? '• ' + product.olcu : ''} ${product.kilogram ? '• ' + product.kilogram + ' kg' : ''}
                                 </div>
+                                ${product.notlar ? '<div class="product-details" style="color: #888; font-style: italic;">' + product.notlar + '</div>' : ''}
                               </div>
-                              <div class="product-quantity">${product.quantity || 0} adet</div>
+                              <div class="product-quantity">${product.kilogram || 0} kg</div>
                             </div>
                           `).join('')
                         : '<div class="empty-layer">Bu katmanda ürün yok</div>'
