@@ -13,6 +13,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
 import { Badge } from "@/components/ui/badge"
 import { useWarehouse } from "@/lib/warehouse-context"
+import ShelfPdfLabel from "@/components/shelf-pdf-label"
 
 interface ShelfModalProps {
   shelfId: ShelfId
@@ -88,6 +89,7 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   const [error, setError] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [isAddingProduct, setIsAddingProduct] = useState(false)
+  const [allLayerProducts, setAllLayerProducts] = useState<Record<string, Product[]>>({})
   const { toast } = useToast()
   const { username } = useAuth()
   const { currentWarehouse } = useWarehouse()
@@ -180,7 +182,7 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
 
   // Get default layers based on shelf type (fallback)
   const getDefaultLayers = (shelfId: ShelfId): { value: Layer; label: string }[] => {
-    if (shelfId === "çıkış yolu") {
+    if (shelfId === "��ıkış yolu") {
       return [
         { value: "dayının alanı", label: "Dayının Alanı" },
         { value: "cam kenarı", label: "Cam Kenarı" },
@@ -203,6 +205,33 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
       ]
     }
   }
+
+  // Fetch all layers products for PDF label
+  useEffect(() => {
+    const fetchAllLayersForPdf = async () => {
+      if (!currentWarehouse || availableLayers.length === 0) return
+      const results: Record<string, Product[]> = {}
+      await Promise.all(
+        availableLayers.map(async (layer) => {
+          try {
+            const encodedLayer = encodeURIComponent(layer.value)
+            const url = `/api/products?shelfId=${shelfId}&layer=${encodedLayer}&warehouse_id=${currentWarehouse.id}`
+            const response = await fetch(url, { headers: { "Cache-Control": "no-cache" } })
+            if (response.ok) {
+              const data = await response.json()
+              results[layer.value] = data.products || []
+            } else {
+              results[layer.value] = []
+            }
+          } catch {
+            results[layer.value] = []
+          }
+        }),
+      )
+      setAllLayerProducts(results)
+    }
+    fetchAllLayersForPdf()
+  }, [shelfId, availableLayers, currentWarehouse, refreshTrigger])
 
   const fetchProducts = async () => {
     if (!currentWarehouse) {
@@ -512,17 +541,42 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl border">
         <DialogHeader className="pb-2 border-b">
-          <DialogTitle className="flex items-center gap-2">
-            <span
-              className={`w-6 h-6 rounded-full ${getShelfColor()} flex items-center justify-center text-xs font-bold`}
-            >
-              {warehouseLayout?.shelves
-                .find((shelf) => shelf.id === shelfId)
-                ?.name?.substring(0, 2)
-                .toUpperCase() || "R"}
-            </span>
-            Raf Detayları
-          </DialogTitle>
+          <div className="flex items-center justify-between gap-2">
+            <DialogTitle className="flex items-center gap-2">
+              <span
+                className={`w-6 h-6 rounded-full ${getShelfColor()} flex items-center justify-center text-xs font-bold`}
+              >
+                {warehouseLayout?.shelves
+                  .find((shelf) => shelf.id === shelfId)
+                  ?.name?.substring(0, 2)
+                  .toUpperCase() || "R"}
+              </span>
+              Raf Detayları
+            </DialogTitle>
+            {Object.keys(allLayerProducts).length > 0 && (
+              <ShelfPdfLabel
+                shelfId={shelfId}
+                shelfName={
+                  warehouseLayout?.shelves.find((shelf) => shelf.id === shelfId)?.name || `${shelfId} Rafı`
+                }
+                warehouseName={currentWarehouse?.name || "Depo"}
+                productsByLayer={allLayerProducts}
+                shelfColor={
+                  (
+                    {
+                      A: "#6366f1",
+                      B: "#8b5cf6",
+                      C: "#ec4899",
+                      D: "#f43f5e",
+                      E: "#f97316",
+                      F: "#eab308",
+                      G: "#84cc16",
+                    } as Record<string, string>
+                  )[shelfId] ?? "#94a3b8"
+                }
+              />
+            )}
+          </div>
         </DialogHeader>
 
         <Tabs value={activeLayer} onValueChange={(value) => setActiveLayer(value as Layer)}>
