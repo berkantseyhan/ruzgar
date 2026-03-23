@@ -31,7 +31,7 @@ export default function LoginPage() {
         // Password is correct, now ask for username
         setShowUsernameModal(true)
       } else {
-        setError("Hatali şifre. Lütfen tekrar deneyin.")
+        setError("Hatalı şifre. Lütfen tekrar deneyin.")
       }
     } catch (err) {
       setError("Giriş yapılırken bir hata oluştu. Lütfen tekrar deneyin.")
