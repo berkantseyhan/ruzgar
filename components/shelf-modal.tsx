@@ -6,13 +6,13 @@ import { getAvailableLayersForShelf } from "@/lib/database"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Edit, Trash2, Plus, RefreshCw, Loader2, Package, Layers } from "lucide-react"
 import ProductForm from "@/components/product-form"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
 import { Badge } from "@/components/ui/badge"
 import { useWarehouse } from "@/lib/warehouse-context"
-import { cn } from "@/lib/utils"
 
 interface ShelfModalProps {
   shelfId: ShelfId
@@ -352,6 +352,7 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
   const renderContent = () => {
     const currentShelf = warehouseLayout?.shelves.find((shelf) => shelf.id === shelfId)
     const shelfDisplayName = currentShelf?.name || `${shelfId} Rafı`
+    const shelfIndicatorName = currentShelf?.name?.substring(0, 2).toUpperCase() || "R"
 
     if (editingProduct) {
       return (
@@ -375,17 +376,22 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
 
     return (
       <>
-        {/* Section header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
             <div
-              className={`w-8 h-8 rounded-lg ${getShelfColor()} flex items-center justify-center font-bold text-xs shadow-sm shrink-0`}
+              className={`w-12 h-12 rounded-full ${getShelfColor()} flex items-center justify-center font-bold shadow-md`}
             >
-              {(currentShelf?.name || shelfId).substring(0, 2).toUpperCase()}
+              {shelfIndicatorName}
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground leading-tight">{shelfDisplayName}</p>
-              <p className="text-xs text-muted-foreground capitalize">{activeLayer}</p>
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Package className="h-4 w-4 text-primary" />
+                {shelfDisplayName}
+              </h3>
+              <div className="flex items-center gap-1.5 mt-1">
+                <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">{activeLayer}</p>
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
@@ -394,95 +400,93 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
                 onClick={fetchProducts}
                 size="sm"
                 variant="outline"
-                className="h-8 text-xs px-3"
+                className="transition-colors duration-200 bg-transparent"
               >
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                <RefreshCw className="h-4 w-4 mr-2" />
                 Yenile
               </Button>
             )}
-            <Button onClick={handleAddClick} size="sm" className="h-8 text-xs px-3 bg-primary">
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
+            <Button onClick={handleAddClick} size="sm" className="transition-colors duration-200 bg-primary">
+              <Plus className="h-4 w-4 mr-2" />
               Ürün Ekle
             </Button>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-14 gap-3">
-            <Loader2 className="h-7 w-7 animate-spin text-primary" />
-            <p className="text-xs text-muted-foreground">Ürünler yükleniyor...</p>
+          <div className="flex flex-col justify-center items-center h-40 gap-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Ürünler yükleniyor...</p>
           </div>
         ) : error ? (
-          <div className="py-8 px-4 text-center rounded-lg bg-destructive/10 border border-destructive/20">
-            <p className="text-sm font-medium text-destructive">{error}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Lütfen tekrar deneyin.</p>
+          <div className="text-center py-8 text-destructive bg-destructive/10 rounded-lg border border-destructive/20 p-4">
+            <p className="font-medium">{error}</p>
+            <p className="mt-2 text-muted-foreground">Lütfen tekrar deneyin veya yeni bir ürün ekleyin.</p>
           </div>
         ) : products.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 rounded-lg bg-muted/30 border border-dashed border-border">
-            <div className="w-12 h-12 rounded-xl bg-muted/60 flex items-center justify-center">
-              <Package className="h-6 w-6 text-muted-foreground/50" />
-            </div>
-            <p className="text-sm text-muted-foreground">Bu raf ve katmanda ürün bulunmamaktadır.</p>
-            <Button onClick={handleAddClick} variant="outline" size="sm" className="h-8 text-xs mt-1">
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
+          <div className="text-center py-12 text-muted-foreground bg-muted/50 rounded-lg border border-dashed">
+            <Package className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
+            <p className="mb-2">Bu raf ve katmanda ürün bulunmamaktadır.</p>
+            <Button
+              onClick={handleAddClick}
+              variant="outline"
+              size="sm"
+              className="mt-2 transition-colors duration-200 bg-transparent"
+            >
+              <Plus className="h-4 w-4 mr-2" />
               Ürün Ekle
             </Button>
           </div>
         ) : (
-          <div className="grid gap-2.5 sm:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {products.map((product) => (
-              <div
-                key={product.id}
-                className="group relative flex items-start gap-3 rounded-xl border border-border bg-card p-3.5 hover:border-primary/30 hover:shadow-sm transition-all duration-150"
-              >
-                {/* Color dot / icon */}
-                <div className={`mt-0.5 w-8 h-8 rounded-lg ${getShelfColor()} flex items-center justify-center shrink-0`}>
-                  <Package className="h-4 w-4 text-white/90" />
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-foreground leading-tight truncate">{product.urunAdi}</p>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 shrink-0 font-normal">
+              <Card key={product.id} className="overflow-hidden border transition-shadow duration-200">
+                <CardHeader className="pb-2 bg-muted/20">
+                  <div className="flex justify-between items-start">
+                    <CardTitle className="text-base flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
+                      {product.urunAdi}
+                    </CardTitle>
+                    <Badge variant="outline" className="font-normal">
                       {product.kategori}
                     </Badge>
                   </div>
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                    <span>
-                      <span className="text-foreground/60">Ölçü: </span>
-                      <span className="font-medium text-foreground">{product.olcu}</span>
-                    </span>
-                    <span>
-                      <span className="text-foreground/60">Ağırlık: </span>
-                      <span className="font-medium text-foreground">{product.kilogram} kg</span>
-                    </span>
+                </CardHeader>
+                <CardContent className="space-y-2 pt-3 text-sm">
+                  <div className="grid grid-cols-2 gap-1">
+                    <span className="font-medium text-muted-foreground">Ölçü:</span>
+                    <span>{product.olcu}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <span className="font-medium text-muted-foreground">Kilogram:</span>
+                    <span className="font-mono">{product.kilogram}</span>
                   </div>
                   {product.notlar && (
-                    <p className="mt-1.5 text-xs text-muted-foreground bg-muted/40 rounded-md px-2 py-1 leading-relaxed">
-                      {product.notlar}
-                    </p>
+                    <div className="mt-3 pt-2 border-t">
+                      <span className="font-medium text-muted-foreground block mb-1">Notlar:</span>
+                      <p className="text-sm bg-muted/30 p-2 rounded-md">{product.notlar}</p>
+                    </div>
                   )}
-                </div>
-
-                {/* Actions — reveal on hover */}
-                <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                  <button
+                </CardContent>
+                <CardFooter className="flex justify-end gap-2 bg-muted/20 pt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleEditClick(product)}
-                    className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-                    title="Düzenle"
+                    className="transition-colors duration-200"
                   >
-                    <Edit className="h-3.5 w-3.5" />
-                  </button>
-                  <button
+                    <Edit className="h-4 w-4 text-primary" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleDeleteProduct(product)}
-                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                    title="Sil"
+                    className="transition-colors duration-200"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </CardFooter>
+              </Card>
             ))}
           </div>
         )}
@@ -506,57 +510,62 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[88vh] overflow-y-auto border border-border bg-background shadow-2xl rounded-xl p-0">
-        {/* Modal header */}
-        <DialogHeader className="px-5 pt-5 pb-4 border-b border-border">
-          <DialogTitle className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <div
-              className={`w-6 h-6 rounded-md ${getShelfColor()} flex items-center justify-center text-[10px] font-bold shadow-sm`}
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl border">
+        <DialogHeader className="pb-2 border-b">
+          <DialogTitle className="flex items-center gap-2">
+            <span
+              className={`w-6 h-6 rounded-full ${getShelfColor()} flex items-center justify-center text-xs font-bold`}
             >
               {warehouseLayout?.shelves
-                .find((s) => s.id === shelfId)
+                .find((shelf) => shelf.id === shelfId)
                 ?.name?.substring(0, 2)
                 .toUpperCase() || "R"}
-            </div>
+            </span>
             Raf Detayları
           </DialogTitle>
         </DialogHeader>
 
-        <div className="px-5 py-4">
-          {/* Layer selector */}
-          <Tabs value={activeLayer} onValueChange={(value) => setActiveLayer(value as Layer)}>
-            <div className="mb-5">
-              <div className="flex flex-wrap gap-1.5 p-1.5 bg-muted rounded-xl">
+        <Tabs value={activeLayer} onValueChange={(value) => setActiveLayer(value as Layer)}>
+          <div className="mb-6">
+            <div className="w-full bg-muted rounded-lg p-1.5 shadow-sm">
+              <div className="flex flex-wrap gap-1.5 justify-center sm:justify-start">
                 {availableLayers.map((layer) => (
                   <button
                     key={layer.value}
                     onClick={() => setActiveLayer(layer.value)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 min-w-[90px] justify-center",
-                      activeLayer === layer.value
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground hover:bg-background/60",
-                    )}
+                    className={`
+              flex items-center justify-center gap-2 px-4 py-3 rounded-md font-medium text-sm
+              transition-all duration-200 min-w-fit flex-1 sm:flex-none
+              ${
+                activeLayer === layer.value
+                  ? "bg-primary text-primary-foreground shadow-md scale-105"
+                  : "bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }
+            `}
+                    style={{
+                      minWidth: availableLayers.length <= 3 ? "120px" : availableLayers.length <= 5 ? "100px" : "80px",
+                    }}
                   >
-                    <Layers className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{layer.label}</span>
+                    <Layers className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate font-medium">{layer.label}</span>
                   </button>
                 ))}
               </div>
-              <div className="flex justify-end mt-1.5">
-                <span className="text-[11px] text-muted-foreground">
-                  {availableLayers.length} katman mevcut
-                </span>
-              </div>
             </div>
 
-            {availableLayers.map((layer) => (
-              <TabsContent key={layer.value} value={layer.value} className="mt-0">
-                {renderContent()}
-              </TabsContent>
-            ))}
-          </Tabs>
-        </div>
+            <div className="flex justify-center mt-2">
+              <Badge variant="outline" className="text-xs">
+                {availableLayers.length} katman mevcut
+              </Badge>
+            </div>
+          </div>
+
+          {availableLayers.map((layer) => (
+            <TabsContent key={layer.value} value={layer.value} className="mt-0 animate-fadeIn">
+              {renderContent()}
+            </TabsContent>
+          ))}
+        </Tabs>
       </DialogContent>
     </Dialog>
   )
