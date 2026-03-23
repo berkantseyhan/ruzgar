@@ -840,7 +840,21 @@ export default function DraggableWarehouseMap() {
         .map(({ shelf, productsByLayer }) => {
           const shelfColor = SHELF_COLORS[shelf.id] ?? "#94a3b8"
           const shelfName = shelf.name && shelf.name.trim() ? shelf.name : shelf.id
-          const activeLayers = Object.keys(productsByLayer).filter((l) => productsByLayer[l].length > 0)
+          const LAYER_ORDER = [
+            "üst kat", "orta kat", "alt kat",
+            "a önü", "b önü", "c önü",
+            "mutfak yanı", "tezgah yanı", "dayının alanı",
+            "cam kenarı", "tuvalet önü", "merdiven tarafı",
+          ]
+          const activeLayers = Object.keys(productsByLayer)
+            .filter((l) => productsByLayer[l].length > 0)
+            .sort((a, b) => {
+              const ai = LAYER_ORDER.indexOf(a.toLowerCase())
+              const bi = LAYER_ORDER.indexOf(b.toLowerCase())
+              const aIdx = ai === -1 ? LAYER_ORDER.length : ai
+              const bIdx = bi === -1 ? LAYER_ORDER.length : bi
+              return aIdx - bIdx
+            })
           const totalProducts = Object.values(productsByLayer).reduce((a, b) => a + b.length, 0)
 
           return `
