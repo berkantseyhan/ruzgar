@@ -62,6 +62,7 @@ export interface ShelfLayout {
   rotation?: number // Rotation in degrees (0, 90, 180, 270)
   isCommon?: boolean
   customLayers?: string[]
+  name?: string
 }
 
 export interface WarehouseLayout {

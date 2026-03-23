@@ -3,13 +3,14 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import type { ShelfId, ShelfLayout, WarehouseLayout } from "@/lib/database"
+import { getAvailableLayersForShelf } from "@/lib/database"
 import ShelfModal from "@/components/shelf-modal"
 import ShelfLayersEditor from "@/components/shelf-layers-editor"
 import ConfirmDialog from "@/components/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import { Save, Lock, Unlock, Grid, Plus, Trash2, Edit3, Check, X, Layers, RotateCw } from "lucide-react"
+import { Save, Lock, Unlock, Grid, Plus, Trash2, Edit3, Check, X, Layers, RotateCw, FileDown, CheckSquare, Square } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
@@ -22,6 +23,8 @@ interface DraggableWarehouseMapProps {
 interface DraggableShelfProps {
   shelf: ShelfLayout
   isEditMode: boolean
+  isSelectMode: boolean
+  isSelected: boolean
   onUpdate: (shelf: ShelfLayout) => void
   onDelete: (shelfId: ShelfId) => void
   onClick: (shelfId: ShelfId) => void
@@ -38,6 +41,8 @@ interface DraggableShelfProps {
 function DraggableShelf({
   shelf,
   isEditMode,
+  isSelectMode,
+  isSelected,
   onUpdate,
   onDelete,
   onClick,
@@ -96,6 +101,8 @@ function DraggableShelf({
       }
       return
     }
+
+    if (isSelectMode) return
 
     e.preventDefault()
     setIsDragging(true)
@@ -216,10 +223,14 @@ function DraggableShelf({
     <div
       ref={shelfRef}
       className={`absolute rounded-md ${getShelfColor()} flex items-center justify-center font-bold text-sm sm:text-base md:text-lg lg:text-xl transition-all duration-200 ${
-        isEditMode && !isEditingName
+        isEditMode && !isEditingName && !isSelectMode
           ? "cursor-move border-2 border-dashed border-white/50 shadow-lg"
-          : "cursor-pointer hover:shadow-lg"
-      } ${isDragging ? "z-50 scale-105" : ""} ${isResizing ? "z-50" : ""} ${isEditingName ? "z-50" : ""}`}
+          : isSelectMode
+            ? "cursor-pointer"
+            : "cursor-pointer hover:shadow-lg"
+      } ${isDragging ? "z-50 scale-105" : ""} ${isResizing ? "z-50" : ""} ${isEditingName ? "z-50" : ""} ${
+        isSelectMode && isSelected ? "ring-4 ring-white ring-offset-2 ring-offset-transparent scale-[1.03] brightness-110" : ""
+      }`}
       style={{
         left: `${shelf.x}%`,
         top: `${shelf.y}%`,
@@ -230,6 +241,18 @@ function DraggableShelf({
       }}
       onMouseDown={handleMouseDown}
     >
+      {/* Selection checkbox overlay */}
+      {isSelectMode && (
+        <div className="absolute top-1 right-1 z-10 pointer-events-none">
+          {isSelected ? (
+            <div className="w-5 h-5 bg-white rounded flex items-center justify-center shadow">
+              <Check className="h-3 w-3 text-green-600" strokeWidth={3} />
+            </div>
+          ) : (
+            <div className="w-5 h-5 border-2 border-white/80 rounded bg-black/20"></div>
+          )}
+        </div>
+      )}
       {isEditingName ? (
         <div className="flex items-center gap-1 px-2" onClick={(e) => e.stopPropagation()}>
           <Input
@@ -396,6 +419,9 @@ function getDefaultLayout(): WarehouseLayout {
 export default function DraggableWarehouseMap() {
   const [layout, setLayout] = useState<WarehouseLayout | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [isSelectMode, setIsSelectMode] = useState(false)
+  const [selectedShelves, setSelectedShelves] = useState<Set<ShelfId>>(new Set())
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [selectedShelf, setSelectedShelf] = useState<ShelfId | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -751,8 +777,202 @@ export default function DraggableWarehouseMap() {
   }
 
   const handleShelfClick = (shelfId: ShelfId) => {
+    if (isSelectMode) {
+      setSelectedShelves((prev) => {
+        const next = new Set(prev)
+        if (next.has(shelfId)) {
+          next.delete(shelfId)
+        } else {
+          next.add(shelfId)
+        }
+        return next
+      })
+      return
+    }
     if (!isEditMode && !editingShelfId) {
       setSelectedShelf(shelfId)
+    }
+  }
+
+  const SHELF_COLORS: Record<string, string> = {
+    A: "#6366f1", B: "#8b5cf6", C: "#ec4899", D: "#f43f5e",
+    E: "#f97316", F: "#eab308", G: "#84cc16",
+  }
+  const LAYER_COLORS: Record<string, string> = {
+    "üst kat": "#6366f1", "orta kat": "#8b5cf6", "alt kat": "#ec4899",
+    "a önü": "#f43f5e", "b önü": "#f97316", "c önü": "#eab308",
+    "mutfak yanı": "#84cc16", "tezgah yanı": "#14b8a6",
+    "dayının alanı": "#3b82f6", "cam kenarı": "#06b6d4",
+    "tuvalet önü": "#10b981", "merdiven tarafı": "#6d28d9",
+  }
+
+  const handleExportPdf = async () => {
+    if (!currentWarehouse || selectedShelves.size === 0 || !layout) return
+    setIsExportingPdf(true)
+
+    try {
+      // Fetch products for each selected shelf, grouped by layer
+      const shelfDataArr = await Promise.all(
+        Array.from(selectedShelves).map(async (shelfId) => {
+          const shelf = layout.shelves.find((s) => s.id === shelfId)
+          if (!shelf) return null
+          // Get layers from local layout (no extra API call needed)
+          const layers = getAvailableLayersForShelf(shelfId, layout)
+          // Fetch products per layer
+          const productsByLayer: Record<string, any[]> = {}
+          await Promise.all(
+            layers.map(async (layer) => {
+              const r = await fetch(
+                `/api/products?shelfId=${shelfId}&layer=${encodeURIComponent(layer)}&warehouse_id=${currentWarehouse.id}`,
+                { headers: { "Cache-Control": "no-cache" } },
+              )
+              productsByLayer[layer] = r.ok ? (await r.json()).products || [] : []
+            }),
+          )
+          return { shelf, productsByLayer }
+        }),
+      )
+
+      const validShelfData = shelfDataArr.filter(Boolean) as { shelf: ShelfLayout; productsByLayer: Record<string, any[]> }[]
+      const printDate = new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "long", year: "numeric" })
+
+      const shelvesHtml = validShelfData
+        .map(({ shelf, productsByLayer }) => {
+          const shelfColor = SHELF_COLORS[shelf.id] ?? "#94a3b8"
+          const shelfName = shelf.name && shelf.name.trim() ? shelf.name : shelf.id
+          const LAYER_ORDER = [
+            "üst kat", "orta kat", "alt kat",
+            "a önü", "b önü", "c önü",
+            "mutfak yanı", "tezgah yanı", "dayının alanı",
+            "cam kenarı", "tuvalet önü", "merdiven tarafı",
+          ]
+          const activeLayers = Object.keys(productsByLayer)
+            .filter((l) => productsByLayer[l].length > 0)
+            .sort((a, b) => {
+              const ai = LAYER_ORDER.indexOf(a.toLowerCase())
+              const bi = LAYER_ORDER.indexOf(b.toLowerCase())
+              const aIdx = ai === -1 ? LAYER_ORDER.length : ai
+              const bIdx = bi === -1 ? LAYER_ORDER.length : bi
+              return aIdx - bIdx
+            })
+          const totalProducts = Object.values(productsByLayer).reduce((a, b) => a + b.length, 0)
+
+          return `
+            <div class="shelf-page">
+              <div class="shelf-header" style="background:${shelfColor}">
+                <div class="shelf-badge">${shelfName.substring(0, 2).toUpperCase()}</div>
+                <div class="shelf-info">
+                  <h2>${shelfName}</h2>
+                  <div class="shelf-subtitle">${currentWarehouse.name} &bull; ${totalProducts} ürün &bull; ${activeLayers.length} aktif katman</div>
+                </div>
+              </div>
+              <div class="shelf-meta">
+                <span><strong>Raf ID:</strong> ${shelf.id}</span>
+                <span><strong>Tarih:</strong> ${printDate}</span>
+              </div>
+              ${
+                activeLayers.length === 0
+                  ? `<div class="empty-shelf">Bu rafta kayıtlı ürün bulunmamaktadır.</div>`
+                  : activeLayers
+                      .map(
+                        (layer) => `
+                <div class="layer-section">
+                  <div class="layer-header">
+                    <div class="layer-dot" style="background:${LAYER_COLORS[layer.toLowerCase()] ?? "#94a3b8"}"></div>
+                    <span class="layer-title">${layer.charAt(0).toUpperCase() + layer.slice(1)}</span>
+                    <span class="layer-count">${productsByLayer[layer].length} ürün</span>
+                  </div>
+                  <table class="product-table">
+                    <thead>
+                      <tr>
+                        <th>Ürün Adı</th>
+                        <th>Kategori</th>
+                        <th>Ölçü</th>
+                        <th>Kilogram</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${productsByLayer[layer]
+                        .map(
+                          (p: any) => `
+                        <tr>
+                          <td>
+                            <div class="product-name">${p.urunAdi}</div>
+                            ${p.notlar ? `<div class="product-note">${p.notlar}</div>` : ""}
+                          </td>
+                          <td><span class="badge">${p.kategori}</span></td>
+                          <td>${p.olcu}</td>
+                          <td>${p.kilogram} kg</td>
+                        </tr>
+                      `,
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `,
+                      )
+                      .join("")
+              }
+              <div class="shelf-footer">
+                Depo Envanter Yönetim Sistemi &bull; ${currentWarehouse.name} &bull; Otomatik Oluşturuldu
+              </div>
+            </div>
+          `
+        })
+        .join(`<div class="page-break"></div>`)
+
+      const printWindow = window.open("", "_blank", "width=900,height=1000")
+      if (!printWindow) return
+
+      printWindow.document.write(`<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>${currentWarehouse.name} - Raf Etiketleri</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;color:#1a1a2e;padding:24px;}
+    .shelf-page{max-width:720px;margin:0 auto 40px;border:2px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08);}
+    .shelf-header{color:#fff;padding:20px 24px;display:flex;align-items:center;gap:16px;}
+    .shelf-badge{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;flex-shrink:0;}
+    .shelf-info h2{font-size:22px;font-weight:800;}
+    .shelf-subtitle{font-size:13px;opacity:.85;margin-top:4px;}
+    .shelf-meta{display:flex;justify-content:space-between;padding:10px 24px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:12px;color:#64748b;}
+    .shelf-meta strong{color:#475569;}
+    .layer-section{padding:16px 24px;border-bottom:1px solid #f1f5f9;}
+    .layer-section:last-of-type{border-bottom:none;}
+    .layer-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+    .layer-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+    .layer-title{font-size:13px;font-weight:700;color:#1e293b;text-transform:capitalize;}
+    .layer-count{font-size:11px;color:#94a3b8;margin-left:auto;}
+    .product-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .product-table th{text-align:left;padding:6px 8px;background:#f1f5f9;color:#64748b;font-weight:600;}
+    .product-table td{padding:7px 8px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:top;}
+    .product-table tr:last-child td{border-bottom:none;}
+    .product-name{font-weight:600;color:#1e293b;}
+    .product-note{font-size:11px;color:#94a3b8;margin-top:2px;}
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;background:#f1f5f9;color:#64748b;}
+    .shelf-footer{padding:12px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8;}
+    .empty-shelf{padding:20px 24px;text-align:center;color:#94a3b8;font-style:italic;font-size:13px;}
+    .page-break{page-break-after:always;height:0;}
+    @media print{
+      body{padding:0;background:#fff;}
+      .shelf-page{border:none;border-radius:0;box-shadow:none;margin:0;}
+    }
+  </style>
+</head>
+<body>
+  ${shelvesHtml}
+  <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>
+</body>
+</html>`)
+      printWindow.document.close()
+    } catch (err) {
+      console.error("PDF export error:", err)
+      toast({ title: "Hata", description: "PDF oluşturulurken bir hata oluştu.", variant: "destructive" })
+    } finally {
+      setIsExportingPdf(false)
     }
   }
 
@@ -906,13 +1126,49 @@ export default function DraggableWarehouseMap() {
 
         <div className="flex items-center gap-2">
           <Badge variant={isEditMode ? "default" : "outline"} className="mr-2">
-            {isEditMode ? "Düzenleme Modu" : "Görüntüleme Modu"}
+            {isSelectMode ? "Seçim Modu" : isEditMode ? "Düzenleme Modu" : "Görüntüleme Modu"}
           </Badge>
+
+          {/* Select mode toggle */}
+          {!isEditMode && (
+            <Button
+              variant={isSelectMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setIsSelectMode((v) => !v)
+                setSelectedShelves(new Set())
+              }}
+              className={`flex items-center gap-2 ${isSelectMode ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600" : ""}`}
+              disabled={!!editingShelfId}
+            >
+              {isSelectMode ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+              {isSelectMode ? "Seçimi Kapat" : "Raf Seç"}
+            </Button>
+          )}
+
+          {/* PDF export button */}
+          {isSelectMode && selectedShelves.size > 0 && (
+            <Button
+              size="sm"
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <FileDown className="h-4 w-4" />
+              {isExportingPdf ? "Hazırlanıyor..." : `${selectedShelves.size} Raf PDF`}
+            </Button>
+          )}
 
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setIsEditMode(!isEditMode)}
+            onClick={() => {
+              setIsEditMode(!isEditMode)
+              if (isSelectMode) {
+                setIsSelectMode(false)
+                setSelectedShelves(new Set())
+              }
+            }}
             className="flex items-center gap-2"
             disabled={!!editingShelfId}
           >
@@ -958,6 +1214,21 @@ export default function DraggableWarehouseMap() {
         </div>
       )}
 
+      {isSelectMode && (
+        <div className="mb-3 flex justify-center">
+          <div className="bg-emerald-600 text-white px-3 py-1.5 rounded-full text-xs flex items-center gap-2 shadow-sm">
+            <CheckSquare className="h-3.5 w-3.5" />
+            <span className="font-medium">Seçim Modu Aktif</span>
+            <span className="opacity-75">•</span>
+            <span className="opacity-90">
+              {selectedShelves.size === 0
+                ? "PDF almak istediğiniz raflara tıklayın"
+                : `${selectedShelves.size} raf seçildi — "Raf PDF" butonuna basın`}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="relative w-full max-w-5xl mx-auto aspect-[5/3] bg-muted/20 rounded-lg p-6 overflow-hidden border border-border shadow-md">
         <div className="absolute inset-0 opacity-20">
           <div
@@ -977,6 +1248,8 @@ export default function DraggableWarehouseMap() {
             key={shelf.id}
             shelf={shelf}
             isEditMode={isEditMode}
+            isSelectMode={isSelectMode}
+            isSelected={selectedShelves.has(shelf.id)}
             onUpdate={(updatedShelf) => handleShelfUpdate(updatedShelf)}
             onDelete={handleShelfDelete}
             onClick={handleShelfClick}

@@ -180,7 +180,7 @@ export default function ShelfModal({ shelfId, onClose, onRefresh }: ShelfModalPr
 
   // Get default layers based on shelf type (fallback)
   const getDefaultLayers = (shelfId: ShelfId): { value: Layer; label: string }[] => {
-    if (shelfId === "çıkış yolu") {
+    if (shelfId === "��ıkış yolu") {
       return [
         { value: "dayının alanı", label: "Dayının Alanı" },
         { value: "cam kenarı", label: "Cam Kenarı" },
