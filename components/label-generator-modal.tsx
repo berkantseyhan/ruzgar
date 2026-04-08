@@ -61,7 +61,7 @@ const isValidDateFormat = (dateString: string): boolean => {
   return day <= daysInMonth
 }
 
-export function LabelGeneratorModal({ onClose }: LabelGeneratorModalProps) {
+export default function LabelGeneratorModal({ onClose }: LabelGeneratorModalProps) {
   const [palletNumber, setPalletNumber] = useState<string>("")
   const [orderNumber, setOrderNumber] = useState<string>("")
   const [isLoadingOrderNumber, setIsLoadingOrderNumber] = useState(false)
