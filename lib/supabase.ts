@@ -1,8 +1,17 @@
 import { createClient as createBrowserClient } from "./supabase/client"
-import { createClient as createServerClient } from "./supabase/server"
 
-// Export both client types for different use cases
-export { createBrowserClient, createServerClient }
+// Server client should only be imported in server contexts
+// import { createClient as createServerClient } from "./supabase/server"
+
+// Export browser client for client components
+export { createBrowserClient }
+
+// Export server client only for server-only imports
+// This prevents accidental usage in client components
+export async function getServerClient() {
+  const { createClient: createServerClient } = await import("./supabase/server")
+  return createServerClient()
+}
 
 // Database table names with prefix
 export const TABLES = {
