@@ -6,12 +6,9 @@ export const supabase = createBrowserClient()
 // Export browser client for client components
 export { createBrowserClient }
 
-// Export server client only for server-only imports
-// This prevents accidental usage in client components
-export async function getServerClient() {
-  const { createClient: createServerClient } = await import("./supabase/server")
-  return createServerClient()
-}
+// NOTE: Server client should be imported directly from "./supabase/server" 
+// in server components/actions only, NOT through this file to avoid 
+// bundling server-only code in client bundles
 
 // Database table names with prefix
 export const TABLES = {
