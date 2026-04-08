@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useTheme } from "@/lib/theme-context"
 import { Button } from "@/components/ui/button"
-import { LogOut, Moon, Sun, Loader2, History, Database, User, LayoutDashboard, Map, Plus } from "lucide-react"
+import { LogOut, Moon, Sun, Loader2, History, Database, User, LayoutDashboard, Map, Plus, Tag } from "lucide-react"
 import WarehouseMap from "@/components/warehouse-map"
 import ProductForm from "@/components/product-form"
 import { WarehouseSelector } from "@/components/warehouse-selector"
+import LabelGeneratorModal from "@/components/label-generator-modal"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("harita")
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [showLabelModal, setShowLabelModal] = useState(false)
 
   const handleLogout = async () => {
     if (!username) return
@@ -79,6 +81,13 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <WarehouseSelector />
             <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowLabelModal(true)}
+                className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white transition-colors duration-200 shadow-md"
+              >
+                <Tag className="h-4 w-4" />
+                Etiket Oluştur
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -167,6 +176,8 @@ export default function Dashboard() {
           </div>
         </Tabs>
       </main>
+
+      {showLabelModal && <LabelGeneratorModal onClose={() => setShowLabelModal(false)} />}
     </div>
   )
 }
