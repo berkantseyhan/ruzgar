@@ -1,8 +1,14 @@
 import { createClient as createBrowserClient } from "./supabase/client"
-import { createClient as createServerClient } from "./supabase/server"
 
-// Export both client types for different use cases
-export { createBrowserClient, createServerClient }
+// Create and export a singleton Supabase client for client-side usage
+export const supabase = createBrowserClient()
+
+// Export browser client for client components
+export { createBrowserClient }
+
+// NOTE: Server client should be imported directly from "./supabase/server" 
+// in server components/actions only, NOT through this file to avoid 
+// bundling server-only code in client bundles
 
 // Database table names with prefix
 export const TABLES = {
