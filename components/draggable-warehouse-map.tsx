@@ -10,7 +10,7 @@ import ConfirmDialog from "@/components/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
-import { Save, Lock, Unlock, Grid, Plus, Trash2, Edit3, Check, X, Layers, RotateCw, FileDown, CheckSquare, Square } from "lucide-react"
+import { Save, Lock, Unlock, Grid, Plus, Trash2, Edit3, Check, X, Layers, RotateCw, FileDown, CheckSquare, Square, ZoomIn, ZoomOut, Maximize2, Magnet, SlidersHorizontal } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
@@ -25,6 +25,8 @@ interface DraggableShelfProps {
   isEditMode: boolean
   isSelectMode: boolean
   isSelected: boolean
+  snapValue: (v: number) => number
+  zoom: number
   onUpdate: (shelf: ShelfLayout) => void
   onDelete: (shelfId: ShelfId) => void
   onClick: (shelfId: ShelfId) => void
@@ -43,6 +45,8 @@ function DraggableShelf({
   isEditMode,
   isSelectMode,
   isSelected,
+  snapValue,
+  zoom,
   onUpdate,
   onDelete,
   onClick,
@@ -173,13 +177,14 @@ function DraggableShelf({
         if (!container) return
 
         const containerRect = container.getBoundingClientRect()
-        const deltaX = ((e.clientX - dragStart.x) / containerRect.width) * 100
-        const deltaY = ((e.clientY - dragStart.y) / containerRect.height) * 100
+        // Divide by zoom so that drag speed matches cursor under zoom
+        const deltaX = ((e.clientX - dragStart.x) / (containerRect.width * zoom)) * 100
+        const deltaY = ((e.clientY - dragStart.y) / (containerRect.height * zoom)) * 100
 
-        const newX = Math.max(0, Math.min(95, initialPosition.x + deltaX))
-        const newY = Math.max(0, Math.min(95, initialPosition.y + deltaY))
+        const rawX = Math.max(0, Math.min(95, initialPosition.x + deltaX))
+        const rawY = Math.max(0, Math.min(95, initialPosition.y + deltaY))
 
-        onUpdate({ ...shelf, x: newX, y: newY })
+        onUpdate({ ...shelf, x: rawX, y: rawY })
       }
 
       if (isResizing && shelfRef.current && onUpdate) {
@@ -187,8 +192,8 @@ function DraggableShelf({
         if (!container) return
 
         const containerRect = container.getBoundingClientRect()
-        const deltaX = ((e.clientX - dragStart.x) / containerRect.width) * 100
-        const deltaY = ((e.clientY - dragStart.y) / containerRect.height) * 100
+        const deltaX = ((e.clientX - dragStart.x) / (containerRect.width * zoom)) * 100
+        const deltaY = ((e.clientY - dragStart.y) / (containerRect.height * zoom)) * 100
 
         const newWidth = Math.max(5, Math.min(50, initialSize.width + deltaX))
         const newHeight = Math.max(5, Math.min(50, initialSize.height + deltaY))
@@ -200,6 +205,16 @@ function DraggableShelf({
     const handleMouseUp = () => {
       setIsDragging(false)
       setIsResizing(false)
+      // Apply snap on release
+      if (isDragging || isResizing) {
+        onUpdate({
+          ...shelf,
+          x: snapValue(shelf.x),
+          y: snapValue(shelf.y),
+          width: snapValue(shelf.width),
+          height: snapValue(shelf.height),
+        })
+      }
     }
 
     if (isDragging || isResizing) {
@@ -211,7 +226,7 @@ function DraggableShelf({
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, shelf, onUpdate, isEditMode, isEditingName])
+  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, shelf, onUpdate, isEditMode, isEditingName, zoom, snapValue])
 
   // Get rotation transform
   const getRotationTransform = () => {
@@ -423,6 +438,17 @@ export default function DraggableWarehouseMap() {
   const [selectedShelves, setSelectedShelves] = useState<Set<ShelfId>>(new Set())
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [selectedShelf, setSelectedShelf] = useState<ShelfId | null>(null)
+  // Zoom & pan
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  // Snap-to-grid
+  const [snapEnabled, setSnapEnabled] = useState(true)
+  const SNAP_GRID = 2 // percent
+  // Properties panel
+  const [propShelfId, setPropShelfId] = useState<ShelfId | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [editingShelfId, setEditingShelfId] = useState<ShelfId | null>(null)
@@ -776,6 +802,39 @@ export default function DraggableWarehouseMap() {
     }
   }
 
+  // Snap helper
+  const snapValue = (val: number) =>
+    snapEnabled ? Math.round(val / SNAP_GRID) * SNAP_GRID : Math.round(val * 10) / 10
+
+  // Zoom controls
+  const handleZoomIn = () => setZoom((z) => Math.min(3, parseFloat((z + 0.25).toFixed(2))))
+  const handleZoomOut = () => setZoom((z) => Math.max(0.5, parseFloat((z - 0.25).toFixed(2))))
+  const handleZoomReset = () => { setZoom(1); setPan({ x: 0, y: 0 }) }
+
+  // Mouse wheel zoom
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault()
+    const delta = e.deltaY < 0 ? 0.1 : -0.1
+    setZoom((z) => Math.min(3, Math.max(0.5, parseFloat((z + delta).toFixed(2)))))
+  }
+
+  // Pan: middle mouse or Space+drag
+  const handleMapMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      e.preventDefault()
+      setIsPanning(true)
+      panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
+    }
+  }
+  const handleMapMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning || !panStart.current) return
+    setPan({
+      x: panStart.current.panX + (e.clientX - panStart.current.x),
+      y: panStart.current.panY + (e.clientY - panStart.current.y),
+    })
+  }
+  const handleMapMouseUp = () => { setIsPanning(false); panStart.current = null }
+
   const handleShelfClick = (shelfId: ShelfId) => {
     if (isSelectMode) {
       setSelectedShelves((prev) => {
@@ -787,6 +846,10 @@ export default function DraggableWarehouseMap() {
         }
         return next
       })
+      return
+    }
+    if (isEditMode && !editingShelfId) {
+      setPropShelfId((prev) => (prev === shelfId ? null : shelfId))
       return
     }
     if (!isEditMode && !editingShelfId) {
@@ -1159,11 +1222,53 @@ export default function DraggableWarehouseMap() {
             </Button>
           )}
 
+          {/* Zoom controls */}
+          <div className="flex items-center gap-1 border border-border rounded-md px-1 py-0.5 bg-background">
+            <button
+              onClick={handleZoomOut}
+              className="p-1 hover:bg-muted rounded transition-colors"
+              title="Uzaklaştır"
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={handleZoomReset}
+              className="px-2 text-xs font-mono hover:bg-muted rounded transition-colors min-w-[3rem] text-center"
+              title="Sıfırla"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              onClick={handleZoomIn}
+              className="p-1 hover:bg-muted rounded transition-colors"
+              title="Yaklaştır"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Snap toggle */}
+          {isEditMode && (
+            <button
+              onClick={() => setSnapEnabled((v) => !v)}
+              title={snapEnabled ? "Snap açık — kapat" : "Snap kapalı — aç"}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                snapEnabled
+                  ? "bg-amber-500/20 border-amber-500/50 text-amber-500"
+                  : "bg-muted border-border text-muted-foreground"
+              }`}
+            >
+              <Magnet className="h-3.5 w-3.5" />
+              Snap
+            </button>
+          )}
+
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
               setIsEditMode(!isEditMode)
+              if (!isEditMode) setPropShelfId(null)
               if (isSelectMode) {
                 setIsSelectMode(false)
                 setSelectedShelves(new Set())
@@ -1229,50 +1334,201 @@ export default function DraggableWarehouseMap() {
         </div>
       )}
 
-      <div className="relative w-full max-w-5xl mx-auto aspect-[5/3] bg-muted/20 rounded-lg p-6 overflow-hidden border border-border shadow-md">
-        <div className="absolute inset-0 opacity-20">
+      <div className={`flex gap-3 items-start ${isEditMode && propShelfId ? "max-w-6xl" : "max-w-5xl"} mx-auto`}>
+        {/* Map container */}
+        <div
+          ref={mapContainerRef}
+          className="relative flex-1 aspect-[5/3] bg-muted/20 rounded-lg overflow-hidden border border-border shadow-md"
+          style={{ cursor: isPanning ? "grabbing" : "default" }}
+          onWheel={handleWheel}
+          onMouseDown={handleMapMouseDown}
+          onMouseMove={handleMapMouseMove}
+          onMouseUp={handleMapMouseUp}
+          onMouseLeave={handleMapMouseUp}
+        >
+          {/* Zoomed & panned content */}
           <div
-            className="w-full h-full"
+            className="absolute inset-0"
             style={{
-              backgroundImage: `
-              linear-gradient(to right, #94a3b8 1px, transparent 1px),
-              linear-gradient(to bottom, #94a3b8 1px, transparent 1px)
-            `,
-              backgroundSize: "20px 20px",
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "center center",
             }}
-          ></div>
+          >
+            {/* Grid */}
+            <div className="absolute inset-0 opacity-20">
+              <div
+                className="w-full h-full"
+                style={{
+                  backgroundImage: `
+                    linear-gradient(to right, #94a3b8 1px, transparent 1px),
+                    linear-gradient(to bottom, #94a3b8 1px, transparent 1px)
+                  `,
+                  backgroundSize: snapEnabled && isEditMode ? "2% 2%" : "20px 20px",
+                }}
+              />
+            </div>
+
+            {layout.shelves.map((shelf) => (
+              <DraggableShelf
+                key={shelf.id}
+                shelf={shelf}
+                isEditMode={isEditMode}
+                isSelectMode={isSelectMode}
+                isSelected={selectedShelves.has(shelf.id)}
+                snapValue={snapValue}
+                zoom={zoom}
+                onUpdate={(updatedShelf) => handleShelfUpdate(updatedShelf)}
+                onDelete={handleShelfDelete}
+                onClick={handleShelfClick}
+                onStartNameEdit={handleStartNameEdit}
+                onEditLayers={handleEditLayers}
+                onRotate={handleShelfRotate}
+                isEditingName={editingShelfId === shelf.id}
+                editingName={editingName}
+                onNameChange={handleNameChange}
+                onSaveName={handleSaveName}
+                onCancelNameEdit={handleCancelNameEdit}
+              />
+            ))}
+
+            {isEditMode && layout.shelves.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-muted-foreground">
+                  <Grid className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">Henüz raf yok</p>
+                  <p className="text-sm">Yeni raf eklemek için "Raf Ekle" butonunu kullanın</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Zoom hint */}
+          <div className="absolute bottom-2 left-2 text-[10px] text-muted-foreground/50 pointer-events-none select-none">
+            Scroll: Zoom &bull; Alt+Sürükle: Pan
+          </div>
         </div>
 
-        {layout.shelves.map((shelf) => (
-          <DraggableShelf
-            key={shelf.id}
-            shelf={shelf}
-            isEditMode={isEditMode}
-            isSelectMode={isSelectMode}
-            isSelected={selectedShelves.has(shelf.id)}
-            onUpdate={(updatedShelf) => handleShelfUpdate(updatedShelf)}
-            onDelete={handleShelfDelete}
-            onClick={handleShelfClick}
-            onStartNameEdit={handleStartNameEdit}
-            onEditLayers={handleEditLayers}
-            onRotate={handleShelfRotate}
-            isEditingName={editingShelfId === shelf.id}
-            editingName={editingName}
-            onNameChange={handleNameChange}
-            onSaveName={handleSaveName}
-            onCancelNameEdit={handleCancelNameEdit}
-          />
-        ))}
+        {/* Properties Panel */}
+        {isEditMode && propShelfId && (() => {
+          const propShelf = layout.shelves.find((s) => s.id === propShelfId)
+          if (!propShelf) return null
+          const update = (patch: Partial<ShelfLayout>) =>
+            handleShelfUpdate({ ...propShelf, ...patch })
+          return (
+            <div className="w-64 shrink-0 rounded-lg border border-border bg-card shadow-md overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2.5 border-b border-border bg-muted/30">
+                <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                  Raf Özellikleri
+                </div>
+                <button
+                  onClick={() => setPropShelfId(null)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
-        {isEditMode && layout.shelves.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Grid className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">Henüz raf yok</p>
-              <p className="text-sm">Yeni raf eklemek için "Raf Ekle" butonunu kullanın</p>
+              <div className="p-3 space-y-3">
+                {/* Shelf ID badge */}
+                <div className="flex items-center gap-2">
+                  <div className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold text-white ${
+                    { A:"bg-indigo-500", B:"bg-violet-500", C:"bg-pink-500", D:"bg-rose-500", E:"bg-orange-500", F:"bg-yellow-500", G:"bg-lime-500" }[propShelf.id] ?? "bg-slate-500"
+                  }`}>
+                    {(propShelf.name || propShelf.id).substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{propShelf.name || propShelf.id}</p>
+                    <p className="text-[10px] text-muted-foreground">ID: {propShelf.id}</p>
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Position */}
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Konum (%)</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: "X", key: "x" as const },
+                      { label: "Y", key: "y" as const },
+                    ].map(({ label, key }) => (
+                      <div key={key}>
+                        <label className="text-[10px] text-muted-foreground mb-1 block">{label}</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={95}
+                          step={snapEnabled ? SNAP_GRID : 0.5}
+                          value={Math.round(propShelf[key] * 10) / 10}
+                          onChange={(e) => update({ [key]: snapValue(parseFloat(e.target.value) || 0) })}
+                          className="w-full text-xs bg-muted/40 border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Size */}
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Boyut (%)</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: "Genişlik", key: "width" as const },
+                      { label: "Yükseklik", key: "height" as const },
+                    ].map(({ label, key }) => (
+                      <div key={key}>
+                        <label className="text-[10px] text-muted-foreground mb-1 block">{label}</label>
+                        <input
+                          type="number"
+                          min={5}
+                          max={50}
+                          step={snapEnabled ? SNAP_GRID : 0.5}
+                          value={Math.round(propShelf[key] * 10) / 10}
+                          onChange={(e) => update({ [key]: snapValue(parseFloat(e.target.value) || 5) })}
+                          className="w-full text-xs bg-muted/40 border border-border rounded px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Rotation */}
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Rotasyon</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {[0, 90, 180, 270].map((deg) => (
+                      <button
+                        key={deg}
+                        onClick={() => update({ rotation: deg })}
+                        className={`flex-1 text-xs py-1.5 rounded border transition-colors ${
+                          (propShelf.rotation ?? 0) === deg
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-muted/40 border-border text-muted-foreground hover:text-foreground hover:border-primary/50"
+                        }`}
+                      >
+                        {deg}°
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* Quick actions */}
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => { handleShelfDelete(propShelfId); setPropShelfId(null) }}
+                    className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Sil
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
       </div>
 
       <ConfirmDialog
