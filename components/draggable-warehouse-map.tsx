@@ -98,6 +98,8 @@ function DraggableShelf({
     }
   }
 
+  const mouseDownPos = useRef<{ x: number; y: number } | null>(null)
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!isEditMode || isEditingName) {
       if (!isEditingName && onClick) {
@@ -109,9 +111,21 @@ function DraggableShelf({
     if (isSelectMode) return
 
     e.preventDefault()
+    mouseDownPos.current = { x: e.clientX, y: e.clientY }
     setIsDragging(true)
     setDragStart({ x: e.clientX, y: e.clientY })
     setInitialPosition({ x: shelf.x, y: shelf.y })
+  }
+
+  const handleMouseUpLocal = (e: React.MouseEvent) => {
+    if (!isEditMode || !mouseDownPos.current) return
+    const dx = Math.abs(e.clientX - mouseDownPos.current.x)
+    const dy = Math.abs(e.clientY - mouseDownPos.current.y)
+    // If mouse barely moved, treat as a click → open properties panel
+    if (dx < 5 && dy < 5 && onClick) {
+      onClick(shelf.id)
+    }
+    mouseDownPos.current = null
   }
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
@@ -255,6 +269,7 @@ function DraggableShelf({
         transformOrigin: "center center",
       }}
       onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUpLocal}
     >
       {/* Selection checkbox overlay */}
       {isSelectMode && (
