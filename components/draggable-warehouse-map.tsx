@@ -117,17 +117,6 @@ function DraggableShelf({
     setInitialPosition({ x: shelf.x, y: shelf.y })
   }
 
-  const handleMouseUpLocal = (e: React.MouseEvent) => {
-    if (!isEditMode || !mouseDownPos.current) return
-    const dx = Math.abs(e.clientX - mouseDownPos.current.x)
-    const dy = Math.abs(e.clientY - mouseDownPos.current.y)
-    // If mouse barely moved, treat as a click → open properties panel
-    if (dx < 5 && dy < 5 && onClick) {
-      onClick(shelf.id)
-    }
-    mouseDownPos.current = null
-  }
-
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     if (!isEditMode || isEditingName) return
 
@@ -216,7 +205,16 @@ function DraggableShelf({
       }
     }
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      // If mouse barely moved from mousedown → treat as click → open properties panel
+      if (isDragging && mouseDownPos.current) {
+        const dx = Math.abs(e.clientX - mouseDownPos.current.x)
+        const dy = Math.abs(e.clientY - mouseDownPos.current.y)
+        if (dx < 5 && dy < 5 && onClick) {
+          onClick(shelf.id)
+        }
+      }
+      mouseDownPos.current = null
       setIsDragging(false)
       setIsResizing(false)
       // Apply snap on release
@@ -233,6 +231,9 @@ function DraggableShelf({
 
     if (isDragging || isResizing) {
       document.addEventListener("mousemove", handleMouseMove)
+    }
+    // Always listen for mouseup in edit mode so single-click detection works
+    if (isEditMode) {
       document.addEventListener("mouseup", handleMouseUp)
     }
 
@@ -240,7 +241,7 @@ function DraggableShelf({
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
     }
-  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, shelf, onUpdate, isEditMode, isEditingName, zoom, snapValue])
+  }, [isDragging, isResizing, dragStart, initialPosition, initialSize, shelf, onUpdate, isEditMode, isEditingName, zoom, snapValue, onClick])
 
   // Get rotation transform
   const getRotationTransform = () => {
@@ -269,7 +270,6 @@ function DraggableShelf({
         transformOrigin: "center center",
       }}
       onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUpLocal}
     >
       {/* Selection checkbox overlay */}
       {isSelectMode && (
