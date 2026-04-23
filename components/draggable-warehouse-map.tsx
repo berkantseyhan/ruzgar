@@ -811,13 +811,6 @@ export default function DraggableWarehouseMap() {
   const handleZoomOut = () => setZoom((z) => Math.max(0.5, parseFloat((z - 0.25).toFixed(2))))
   const handleZoomReset = () => { setZoom(1); setPan({ x: 0, y: 0 }) }
 
-  // Mouse wheel zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    const delta = e.deltaY < 0 ? 0.1 : -0.1
-    setZoom((z) => Math.min(3, Math.max(0.5, parseFloat((z + delta).toFixed(2)))))
-  }
-
   // Pan: middle mouse or Space+drag
   const handleMapMouseDown = (e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
@@ -1334,13 +1327,12 @@ export default function DraggableWarehouseMap() {
         </div>
       )}
 
-      <div className={`flex gap-3 items-start ${isEditMode && propShelfId ? "max-w-6xl" : "max-w-5xl"} mx-auto`}>
+      <div className={`flex gap-3 items-start ${isEditMode && propShelfId ? "max-w-[1400px]" : "max-w-[1200px]"} mx-auto`}>
         {/* Map container */}
         <div
           ref={mapContainerRef}
-          className="relative flex-1 aspect-[5/3] bg-muted/20 rounded-lg overflow-hidden border border-border shadow-md"
+          className="relative flex-1 aspect-[5/2.2] bg-muted/20 rounded-xl overflow-hidden border border-border shadow-lg"
           style={{ cursor: isPanning ? "grabbing" : "default" }}
-          onWheel={handleWheel}
           onMouseDown={handleMapMouseDown}
           onMouseMove={handleMapMouseMove}
           onMouseUp={handleMapMouseUp}
@@ -1402,9 +1394,9 @@ export default function DraggableWarehouseMap() {
             )}
           </div>
 
-          {/* Zoom hint */}
+          {/* Pan hint */}
           <div className="absolute bottom-2 left-2 text-[10px] text-muted-foreground/50 pointer-events-none select-none">
-            Scroll: Zoom &bull; Alt+Sürükle: Pan
+            Alt+Sürükle: Pan &bull; Zoom: Toolbar butonları
           </div>
         </div>
 
@@ -1472,6 +1464,34 @@ export default function DraggableWarehouseMap() {
                 {/* Size */}
                 <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Boyut (%)</p>
+                  {/* Presets */}
+                  <div className="grid grid-cols-2 gap-1 mb-2">
+                    {[
+                      { label: "Küçük", w: 8, h: 8 },
+                      { label: "Orta", w: 12, h: 10 },
+                      { label: "Büyük", w: 18, h: 12 },
+                      { label: "Geniş", w: 22, h: 8 },
+                    ].map((preset) => {
+                      const active =
+                        Math.round(propShelf.width) === preset.w &&
+                        Math.round(propShelf.height) === preset.h
+                      return (
+                        <button
+                          key={preset.label}
+                          onClick={() => update({ width: preset.w, height: preset.h })}
+                          className={`text-[11px] py-1.5 rounded border transition-colors ${
+                            active
+                              ? "bg-primary/20 border-primary text-primary font-semibold"
+                              : "bg-muted/40 border-border text-muted-foreground hover:text-foreground hover:border-primary/50"
+                          }`}
+                        >
+                          {preset.label}
+                          <span className="block text-[9px] opacity-60">{preset.w}×{preset.h}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {/* Manual inputs */}
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { label: "Genişlik", key: "width" as const },
