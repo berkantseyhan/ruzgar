@@ -24,7 +24,32 @@ function generateTraceNumber(): string {
   return `RC-${date}-${rand}`
 }
 
-// Draw CODE128-like barcode onto canvas (simplified visual representation)
+// Generate a deterministic binary barcode pattern from text (interleaved 2-of-5 style)
+function getBarPattern(text: string): number[] {
+  // Encode each character as a sequence of narrow(1) and wide(3) bars, alternating black/white
+  const bars: number[] = []
+  // Start guard: narrow-narrow-narrow-narrow
+  bars.push(1, 1, 1, 1)
+  for (let ci = 0; ci < text.length; ci += 2) {
+    const c1 = text.charCodeAt(ci) % 10
+    const c2 = ci + 1 < text.length ? text.charCodeAt(ci + 1) % 10 : 0
+    // I2of5 widths: 0=narrow(1), 1=wide(3)
+    const W2of5 = [
+      [1,1,3,3,1],[3,1,1,1,3],[1,3,1,1,3],[3,3,1,1,1],[1,1,3,1,3],
+      [3,1,3,1,1],[1,3,3,1,1],[1,1,1,3,3],[3,1,1,3,1],[1,3,1,3,1],
+    ]
+    const d1 = W2of5[c1]
+    const d2 = W2of5[c2]
+    for (let i = 0; i < 5; i++) {
+      bars.push(d1[i]) // black
+      bars.push(d2[i]) // white
+    }
+  }
+  // Stop guard
+  bars.push(3, 1, 1)
+  return bars
+}
+
 function drawBarcode(canvas: HTMLCanvasElement, text: string) {
   const ctx = canvas.getContext("2d")
   if (!ctx) return
@@ -34,34 +59,20 @@ function drawBarcode(canvas: HTMLCanvasElement, text: string) {
   ctx.fillStyle = "#ffffff"
   ctx.fillRect(0, 0, W, H)
 
-  // Generate pseudo-random bar pattern from text
-  let hash = 0
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash * 31 + text.charCodeAt(i)) >>> 0
-  }
-  const seed = hash
+  const pattern = getBarPattern(text)
+  const totalUnits = pattern.reduce((a, b) => a + b, 0)
+  const unitW = W / totalUnits
 
-  const barCount = 60
-  const barW = W / barCount
   ctx.fillStyle = "#000000"
-
-  // Start/end guards
-  for (let i = 0; i < 3; i++) {
-    ctx.fillRect(i * barW * 1.2, 0, barW * 0.8, H)
-  }
-  for (let i = 0; i < 3; i++) {
-    ctx.fillRect(W - (i + 1) * barW * 1.2, 0, barW * 0.8, H)
-  }
-
-  // Data bars
-  let s = seed
-  for (let i = 4; i < barCount - 4; i++) {
-    s = (s * 1664525 + 1013904223) >>> 0
-    const thick = (s % 3) + 1
-    if ((i + s) % 2 === 0) {
-      ctx.fillRect(i * barW, 0, barW * thick * 0.6, H)
+  let x = 0
+  pattern.forEach((units, idx) => {
+    const barW = units * unitW
+    if (idx % 2 === 0) {
+      // black bar
+      ctx.fillRect(Math.round(x), 0, Math.max(1, Math.round(barW)), H)
     }
-  }
+    x += barW
+  })
 }
 
 const DEFAULT_FIELDS: LabelField[] = [
@@ -108,13 +119,17 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     const barcodeCanvas = barcodeRef.current
     const barcodeDataUrl = barcodeCanvas ? barcodeCanvas.toDataURL("image/png") : ""
 
-    const rows = enabledFields
-      .filter((f) => f.value.trim())
+    // Absolute logo URL so print window can load it
+    const logoUrl = `${window.location.origin}/ruzgar-civata-logo.jpeg`
+
+    const filledFields = enabledFields.filter((f) => f.value.trim())
+
+    const rows = filledFields
       .map(
         (f) => `
         <tr>
-          <td style="font-weight:700;color:#374151;width:38%;padding:1.5px 0;font-size:6.5pt;white-space:nowrap">${f.label}</td>
-          <td style="color:#111827;padding:1.5px 0;font-size:6.5pt">${f.value}</td>
+          <td style="font-weight:700;color:#374151;width:40%;padding:2px 3px 2px 0;font-size:8.5pt;white-space:nowrap;vertical-align:top">${f.label}</td>
+          <td style="color:#111827;padding:2px 0;font-size:8.5pt;vertical-align:top">${f.value}</td>
         </tr>`,
       )
       .join("")
@@ -122,42 +137,42 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     const labelHtml = `
       <div style="
         width:100mm;height:100mm;
-        border:1px solid #d1d5db;
-        border-radius:3mm;
-        padding:4mm;
+        padding:5mm 5mm 4mm 5mm;
         box-sizing:border-box;
         font-family:'Segoe UI',Arial,sans-serif;
         background:#fff;
         display:flex;
         flex-direction:column;
-        gap:2mm;
-        page-break-after:always;
       ">
         <!-- Logo -->
-        <div style="text-align:center;border-bottom:0.4mm solid #e5e7eb;padding-bottom:2mm">
+        <div style="text-align:center;border-bottom:0.5mm solid #d1d5db;padding-bottom:2mm;margin-bottom:2mm;flex-shrink:0">
           <img
-            src="/ruzgar-civata-logo.jpeg"
-            style="height:14mm;object-fit:contain;"
-            crossorigin="anonymous"
+            src="${logoUrl}"
+            style="height:16mm;max-width:80mm;object-fit:contain;"
           />
         </div>
 
         <!-- Barcode -->
-        <div style="text-align:center">
-          <img src="${barcodeDataUrl}" style="height:12mm;width:100%;object-fit:fill;" />
-          <p style="font-size:6pt;font-family:monospace;color:#374151;margin:0.5mm 0 0;">${traceNo}</p>
+        <div style="text-align:center;flex-shrink:0;margin-bottom:1.5mm">
+          <img src="${barcodeDataUrl}" style="height:14mm;width:86mm;display:block;margin:0 auto;" />
+          <p style="font-size:7pt;font-family:'Courier New',monospace;color:#374151;margin:1mm 0 0;letter-spacing:0.5px">${traceNo}</p>
         </div>
 
+        <!-- Divider -->
+        <div style="border-top:0.4mm solid #e5e7eb;margin-bottom:2mm;flex-shrink:0"></div>
+
         <!-- Fields table -->
-        ${
-          rows
-            ? `<table style="width:100%;border-collapse:collapse">${rows}</table>`
-            : `<p style="font-size:7pt;color:#9ca3af;text-align:center;margin:2mm 0">Alan bilgisi girilmedi</p>`
-        }
+        <div style="flex:1;overflow:hidden">
+          ${
+            rows
+              ? `<table style="width:100%;border-collapse:collapse">${rows}</table>`
+              : `<p style="font-size:8pt;color:#9ca3af;text-align:center;margin:3mm 0">—</p>`
+          }
+        </div>
 
         <!-- Footer -->
-        <div style="margin-top:auto;border-top:0.4mm solid #e5e7eb;padding-top:1.5mm;text-align:center">
-          <p style="font-size:5.5pt;color:#9ca3af;margin:0">RÜZGAR CIVATA BAĞLANTI ELEMANLARI</p>
+        <div style="border-top:0.4mm solid #e5e7eb;padding-top:1.5mm;text-align:center;flex-shrink:0">
+          <p style="font-size:6.5pt;color:#9ca3af;margin:0;letter-spacing:0.3px">RÜZGAR CIVATA BAĞLANTI ELEMANLARI</p>
         </div>
       </div>
     `
@@ -173,16 +188,24 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   <title>Traceability Etiket — ${traceNo}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{background:#f3f4f6;display:flex;flex-wrap:wrap;gap:5mm;padding:10mm;justify-content:flex-start;}
+    body{background:#f3f4f6;display:flex;flex-wrap:wrap;gap:5mm;padding:10mm;justify-content:flex-start;align-items:flex-start;}
     @media print{
-      body{background:#fff;padding:0;gap:3mm;}
+      *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      body{background:#fff;padding:0;margin:0;gap:0;}
       @page{size:100mm 100mm;margin:0;}
     }
   </style>
 </head>
 <body>
   ${labelsHtml}
-  <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>
+  <script>
+    // Wait for logo to load before printing
+    var imgs = document.querySelectorAll('img');
+    var loaded = 0;
+    function tryPrint(){ if(++loaded >= imgs.length){ window.print(); window.onafterprint=function(){window.close();}; } }
+    if(imgs.length === 0){ window.print(); window.onafterprint=function(){window.close();}; }
+    else { imgs.forEach(function(img){ if(img.complete){ tryPrint(); } else { img.onload=tryPrint; img.onerror=tryPrint; } }); }
+  <\/script>
 </body>
 </html>`)
     win.document.close()
@@ -330,10 +353,10 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
               <div className="flex flex-col items-center mb-1">
                 <canvas
                   ref={barcodeRef}
-                  width={400}
-                  height={80}
+                  width={800}
+                  height={120}
                   className="w-full"
-                  style={{ imageRendering: "pixelated" }}
+                  style={{ imageRendering: "crisp-edges" }}
                 />
                 <p className="font-mono mt-0.5" style={{ fontSize: "5px" }}>{traceNo}</p>
               </div>
