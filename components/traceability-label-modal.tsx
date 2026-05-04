@@ -112,16 +112,17 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   <!-- ① LOGO — white bg, siyah logo, tam genişlik, net -->
   <div style="
     border:3px solid #000;
-    padding:6px 10px;
+    padding:4px;
     display:flex;
     align-items:center;
     justify-content:center;
     flex-shrink:0;
-    height:110px;
+    height:120px;
     margin-bottom:10px;
+    overflow:hidden;
   ">
     <img src="${logoUrl}"
-      style="width:${S - 60}px;height:94px;object-fit:contain;display:block;"
+      style="width:100%;height:112px;object-fit:contain;display:block;"
     />
   </div>
 
@@ -332,7 +333,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
               style={{ aspectRatio: "1/1", background: "#fff", border: "2px solid #000", padding: "4px 5px" }}
             >
               {/* Logo box */}
-              <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: "27%", marginBottom: "4px", flexShrink: 0, padding: "3px" }}>
+              <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: "30%", marginBottom: "4px", flexShrink: 0, padding: "2px", overflow: "hidden" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
               </div>
