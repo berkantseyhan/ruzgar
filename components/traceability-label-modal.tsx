@@ -70,9 +70,15 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   const disabledFields = fields.filter((f) => !f.enabled)
 
   // --- build print HTML ---
+  // Zebra GC420t: 203 DPI thermal. Rules:
+  //  • NO dark backgrounds — thermal can't print solid fills reliably
+  //  • ALL text pure #000000, NO greys
+  //  • Min font-size 14px, font-weight >= 700
+  //  • Borders min 2px solid black
+  //  • Logo on WHITE background, siyah saf (transparent PNG is fine)
   const handlePrint = () => {
     const logoUrl = `${window.location.origin}/ruzgar-civata-logo.png`
-    // 100mm @ 96dpi ≈ 378px
+    // 100mm @ 96dpi = 378px
     const S = 378
 
     const bigField   = enabledFields.find((f) => f.big && f.value.trim())
@@ -80,87 +86,84 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     const dateField  = restFields.find((f) => f.id === "tarih")
     const mainFields = restFields.filter((f) => f.id !== "tarih")
 
-    // Two-column grid cells
-    const gridCells = mainFields.map((f) =>
-      `<div style="background:#f5f5f5;border-radius:4px;padding:6px 8px;">
-        <div style="font-size:9px;font-weight:600;color:#777;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px;">${f.label}</div>
-        <div style="font-size:16px;font-weight:800;color:#111;line-height:1.1;">${f.value}</div>
-      </div>`
-    ).join("")
+    // Info rows — label left, value right, both pure black bold
+    const infoRows = mainFields.map((f) => `
+      <tr>
+        <td style="font-size:14px;font-weight:700;color:#000;padding:4px 10px 4px 0;white-space:nowrap;vertical-align:top;width:38%;">${f.label}</td>
+        <td style="font-size:14px;font-weight:900;color:#000;padding:4px 0;vertical-align:top;">${f.value}</td>
+      </tr>`).join("")
+
+    const productFontSize = bigField
+      ? (bigField.value.length > 24 ? 18 : bigField.value.length > 16 ? 22 : 26)
+      : 18
 
     const labelHtml = `
 <div style="
   width:${S}px;height:${S}px;
+  padding:14px 16px 12px 16px;
   box-sizing:border-box;
-  font-family:'Segoe UI',Arial,Helvetica,sans-serif;
-  background:#fff;
+  font-family:Arial,Helvetica,sans-serif;
+  background:#ffffff;
   display:flex;
   flex-direction:column;
   overflow:hidden;
 ">
 
-  <!-- ① HEADER: black strip with white logo -->
+  <!-- ① LOGO — white bg, siyah logo, tam genişlik, net -->
   <div style="
-    background:#111;
-    padding:10px 20px;
+    border:2.5px solid #000;
+    padding:8px 12px;
     display:flex;
     align-items:center;
     justify-content:center;
     flex-shrink:0;
-    height:76px;
+    height:72px;
+    margin-bottom:10px;
   ">
     <img src="${logoUrl}"
-      style="height:52px;max-width:320px;object-fit:contain;filter:invert(1) brightness(2);"
+      style="height:50px;max-width:${S - 60}px;object-fit:contain;"
     />
   </div>
 
-  <!-- ② BODY -->
-  <div style="flex:1;display:flex;flex-direction:column;padding:14px 16px 10px 16px;overflow:hidden;gap:10px;">
-
-    <!-- Ürün Adı -->
-    <div style="flex-shrink:0;">
-      <div style="font-size:9px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Ürün</div>
-      <div style="font-size:${bigField && bigField.value.length > 20 ? "20" : "24"}px;font-weight:900;color:#111;line-height:1.1;word-break:break-word;">
-        ${bigField ? bigField.value : '<span style="color:#ccc;">—</span>'}
-      </div>
+  <!-- ② ÜRÜN ADI — en büyük element -->
+  <div style="
+    border-bottom:3px solid #000;
+    padding-bottom:8px;
+    margin-bottom:8px;
+    flex-shrink:0;
+  ">
+    <div style="font-size:10px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">URUN / PRODUCT</div>
+    <div style="font-size:${productFontSize}px;font-weight:900;color:#000;line-height:1.1;word-break:break-word;">
+      ${bigField ? bigField.value : "—"}
     </div>
-
-    <!-- Divider -->
-    <div style="height:2px;background:#111;flex-shrink:0;"></div>
-
-    <!-- Info grid (2 cols) -->
-    <div style="
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:6px;
-      flex-shrink:0;
-    ">
-      ${gridCells}
-    </div>
-
-    <!-- Spacer -->
-    <div style="flex:1;"></div>
-
-    <!-- ③ FOOTER: QR + trace + date -->
-    <div style="
-      display:flex;
-      align-items:center;
-      gap:12px;
-      border-top:2px solid #111;
-      padding-top:10px;
-      flex-shrink:0;
-    ">
-      <img src="${qrDataUrl}" style="width:76px;height:76px;flex-shrink:0;display:block;" />
-      <div style="flex:1;overflow:hidden;">
-        <div style="font-size:8px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">Traceability No</div>
-        <div style="font-size:10px;font-family:'Courier New',monospace;font-weight:700;color:#111;word-break:break-all;line-height:1.5;">${traceNo}</div>
-        ${dateField
-          ? `<div style="font-size:11px;color:#555;margin-top:4px;font-weight:600;">Tarih: ${dateField.value}</div>`
-          : ""}
-      </div>
-    </div>
-
   </div>
+
+  <!-- ③ BİLGİ SATIRLARI -->
+  <div style="flex:1;overflow:hidden;margin-bottom:8px;">
+    ${infoRows
+      ? `<table style="width:100%;border-collapse:collapse;">${infoRows}</table>`
+      : ""}
+  </div>
+
+  <!-- ④ FOOTER: QR + trace no + tarih -->
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:12px;
+    border-top:3px solid #000;
+    padding-top:8px;
+    flex-shrink:0;
+  ">
+    <img src="${qrDataUrl}" style="width:80px;height:80px;flex-shrink:0;display:block;" />
+    <div style="flex:1;overflow:hidden;">
+      <div style="font-size:9px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">TRACEABILITY NO</div>
+      <div style="font-size:11px;font-family:'Courier New',Courier,monospace;font-weight:700;color:#000;word-break:break-all;line-height:1.4;">${traceNo}</div>
+      ${dateField
+        ? `<div style="font-size:13px;font-weight:700;color:#000;margin-top:5px;">Tarih: ${dateField.value}</div>`
+        : ""}
+    </div>
+  </div>
+
 </div>`
 
     const labelsHtml = Array(copies).fill(labelHtml).join("")
@@ -176,7 +179,8 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     @page{size:100mm 100mm;margin:0;}
     html,body{width:${S}px;margin:0;padding:0;background:#fff;}
     @media print{
-      *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+      *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+      html,body{width:${S}px;margin:0;padding:0;background:#fff;}
     }
   </style>
 </head><body>
@@ -184,8 +188,11 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   <script>
     var imgs=document.querySelectorAll('img');
     var total=imgs.length,loaded=0;
-    function tryPrint(){loaded++;if(loaded>=total){setTimeout(function(){window.print();window.onafterprint=function(){window.close();};},350);}}
-    if(total===0){setTimeout(function(){window.print();window.onafterprint=function(){window.close();};},350);}
+    function tryPrint(){
+      loaded++;
+      if(loaded>=total){setTimeout(function(){window.print();window.onafterprint=function(){window.close();};},400);}
+    }
+    if(total===0){setTimeout(function(){window.print();window.onafterprint=function(){window.close();};},400);}
     else{imgs.forEach(function(img){if(img.complete&&img.naturalWidth>0){tryPrint();}else{img.onload=tryPrint;img.onerror=tryPrint;}});}
   <\/script>
 </body></html>`)
@@ -319,69 +326,56 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
           <div className="w-64 shrink-0 border-l border-border bg-muted/10 px-4 py-4 flex flex-col items-center gap-3">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Önizleme</p>
 
-            {/* Preview card — matches print layout */}
+            {/* Preview — Zebra GC420t thermal optimized */}
             <div
-              className="w-full shadow-lg overflow-hidden text-black flex flex-col"
-              style={{ aspectRatio: "1/1", background: "#fff", border: "1px solid #111" }}
+              className="w-full overflow-hidden text-black flex flex-col"
+              style={{ aspectRatio: "1/1", background: "#fff", border: "2px solid #000", padding: "4px 5px" }}
             >
-              {/* Header black strip */}
-              <div style={{
-                background: "#111",
-                height: "20%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "4px 8px",
-                flexShrink: 0,
-              }}>
+              {/* Logo box */}
+              <div style={{ border: "1.5px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: "19%", marginBottom: "4px", flexShrink: 0, padding: "2px" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/ruzgar-civata-logo.png"
-                  alt="Rüzgar Civata"
-                  style={{ height: "100%", maxWidth: "90%", objectFit: "contain", filter: "invert(1) brightness(2)" }}
-                />
+                <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ height: "100%", maxWidth: "90%", objectFit: "contain" }} />
               </div>
 
-              {/* Body */}
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "4px 5px 3px 5px", gap: "3px", overflow: "hidden" }}>
-                {/* Product name */}
-                <div style={{ flexShrink: 0 }}>
-                  <div style={{ fontSize: "4px", color: "#999", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: "1px" }}>Ürün</div>
-                  <div style={{ fontSize: "9px", fontWeight: 900, color: "#111", lineHeight: 1.1, wordBreak: "break-word" }}>
-                    {enabledFields.find((f) => f.big)?.value || <span style={{ color: "#ccc" }}>—</span>}
-                  </div>
+              {/* Product name */}
+              <div style={{ borderBottom: "1.5px solid #000", paddingBottom: "3px", marginBottom: "3px", flexShrink: 0 }}>
+                <div style={{ fontSize: "3.5px", fontWeight: 700, color: "#000", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "1px" }}>URUN / PRODUCT</div>
+                <div style={{ fontSize: "9px", fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" }}>
+                  {enabledFields.find((f) => f.big)?.value || "—"}
                 </div>
-                {/* Divider */}
-                <div style={{ height: "1.5px", background: "#111", flexShrink: 0 }} />
-                {/* Grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2px", flexShrink: 0 }}>
-                  {enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim()).map((f) => (
-                    <div key={f.id} style={{ background: "#f5f5f5", borderRadius: "2px", padding: "2px 3px" }}>
-                      <div style={{ fontSize: "3.5px", color: "#888", fontWeight: 600, textTransform: "uppercase" }}>{f.label}</div>
-                      <div style={{ fontSize: "6px", fontWeight: 800, color: "#111" }}>{f.value}</div>
+              </div>
+
+              {/* Info rows */}
+              <div style={{ flex: 1, overflow: "hidden", marginBottom: "3px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <tbody>
+                    {enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim()).map((f) => (
+                      <tr key={f.id}>
+                        <td style={{ fontSize: "5px", fontWeight: 700, color: "#000", paddingRight: "4px", whiteSpace: "nowrap", verticalAlign: "top", width: "38%" }}>{f.label}</td>
+                        <td style={{ fontSize: "5px", fontWeight: 900, color: "#000", verticalAlign: "top" }}>{f.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer: QR + trace */}
+              <div style={{ borderTop: "1.5px solid #000", paddingTop: "3px", display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+                <canvas ref={qrCanvasRef} width={64} height={64} style={{ width: 24, height: 24, flexShrink: 0 }} />
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <div style={{ fontSize: "3px", fontWeight: 700, color: "#000", textTransform: "uppercase", marginBottom: "1px" }}>TRACEABILITY NO</div>
+                  <div style={{ fontSize: "3.5px", fontFamily: "monospace", fontWeight: 700, color: "#000", wordBreak: "break-all", lineHeight: 1.3 }}>{traceNo}</div>
+                  {enabledFields.find((f) => f.id === "tarih" && f.value) && (
+                    <div style={{ fontSize: "4px", fontWeight: 700, color: "#000", marginTop: "1px" }}>
+                      Tarih: {enabledFields.find((f) => f.id === "tarih")?.value}
                     </div>
-                  ))}
-                </div>
-                {/* Spacer */}
-                <div style={{ flex: 1 }} />
-                {/* Footer: QR + trace */}
-                <div style={{ borderTop: "1.5px solid #111", paddingTop: "3px", display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
-                  <canvas ref={qrCanvasRef} width={64} height={64} style={{ width: 22, height: 22, flexShrink: 0 }} />
-                  <div style={{ flex: 1, overflow: "hidden" }}>
-                    <div style={{ fontSize: "3px", color: "#999", fontWeight: 600, textTransform: "uppercase", marginBottom: "1px" }}>Traceability No</div>
-                    <div style={{ fontSize: "3.5px", fontFamily: "monospace", fontWeight: 700, color: "#111", wordBreak: "break-all", lineHeight: 1.3 }}>{traceNo}</div>
-                    {enabledFields.find((f) => f.id === "tarih" && f.value) && (
-                      <div style={{ fontSize: "3.5px", color: "#555", marginTop: "1px" }}>
-                        Tarih: {enabledFields.find((f) => f.id === "tarih")?.value}
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            <p className="text-[9px] text-muted-foreground text-center">
-              Siyah header&apos;da logo net, 2 sütun bilgi, alt QR
+            <p className="text-[9px] text-muted-foreground text-center leading-relaxed">
+              Zebra GC420t termal optimize &mdash; saf siyah, min 14px yazı
             </p>
           </div>
         </div>
