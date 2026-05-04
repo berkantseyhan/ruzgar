@@ -1,0 +1,383 @@
+"use client"
+
+import { useState, useRef, useEffect, useCallback } from "react"
+import { X, Plus, Trash2, Printer, RefreshCw, ChevronDown, ChevronUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+interface LabelField {
+  id: string
+  key: string
+  label: string
+  value: string
+  enabled: boolean
+}
+
+interface TraceabilityLabelModalProps {
+  onClose: () => void
+}
+
+// Generates a traceability number: RC-YYYYMMDD-XXXXXX
+function generateTraceNumber(): string {
+  const now = new Date()
+  const date = now.toISOString().slice(0, 10).replace(/-/g, "")
+  const rand = Math.floor(100000 + Math.random() * 900000).toString()
+  return `RC-${date}-${rand}`
+}
+
+// Draw CODE128-like barcode onto canvas (simplified visual representation)
+function drawBarcode(canvas: HTMLCanvasElement, text: string) {
+  const ctx = canvas.getContext("2d")
+  if (!ctx) return
+  const W = canvas.width
+  const H = canvas.height
+  ctx.clearRect(0, 0, W, H)
+  ctx.fillStyle = "#ffffff"
+  ctx.fillRect(0, 0, W, H)
+
+  // Generate pseudo-random bar pattern from text
+  let hash = 0
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0
+  }
+  const seed = hash
+
+  const barCount = 60
+  const barW = W / barCount
+  ctx.fillStyle = "#000000"
+
+  // Start/end guards
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(i * barW * 1.2, 0, barW * 0.8, H)
+  }
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(W - (i + 1) * barW * 1.2, 0, barW * 0.8, H)
+  }
+
+  // Data bars
+  let s = seed
+  for (let i = 4; i < barCount - 4; i++) {
+    s = (s * 1664525 + 1013904223) >>> 0
+    const thick = (s % 3) + 1
+    if ((i + s) % 2 === 0) {
+      ctx.fillRect(i * barW, 0, barW * thick * 0.6, H)
+    }
+  }
+}
+
+const DEFAULT_FIELDS: LabelField[] = [
+  { id: "urun",    key: "urun",    label: "Ürün Adı",   value: "",  enabled: true  },
+  { id: "olcu",    key: "olcu",    label: "Ölçü",        value: "",  enabled: true  },
+  { id: "malzeme", key: "malzeme", label: "Malzeme",     value: "",  enabled: true  },
+  { id: "kg",      key: "kg",      label: "KG",          value: "",  enabled: true  },
+  { id: "adet",    key: "adet",    label: "Adet",        value: "",  enabled: true  },
+  { id: "alici",   key: "alici",   label: "Alıcı",       value: "",  enabled: false },
+  { id: "tarih",   key: "tarih",   label: "Tarih",       value: new Date().toLocaleDateString("tr-TR"), enabled: true },
+  { id: "not",     key: "not",     label: "Not",         value: "",  enabled: false },
+]
+
+export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelModalProps) {
+  const [traceNo, setTraceNo] = useState(generateTraceNumber())
+  const [fields, setFields] = useState<LabelField[]>(DEFAULT_FIELDS)
+  const [copies, setCopies] = useState(1)
+  const [showFieldMenu, setShowFieldMenu] = useState(false)
+  const barcodeRef = useRef<HTMLCanvasElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
+
+  // Re-draw barcode whenever traceNo changes
+  useEffect(() => {
+    if (barcodeRef.current) {
+      drawBarcode(barcodeRef.current, traceNo)
+    }
+  }, [traceNo])
+
+  const regenerate = () => setTraceNo(generateTraceNumber())
+
+  const updateField = (id: string, value: string) => {
+    setFields((f) => f.map((field) => (field.id === id ? { ...field, value } : field)))
+  }
+
+  const toggleField = (id: string) => {
+    setFields((f) => f.map((field) => (field.id === id ? { ...field, enabled: !field.enabled } : field)))
+  }
+
+  const enabledFields = fields.filter((f) => f.enabled)
+  const disabledFields = fields.filter((f) => !f.enabled)
+
+  // Build the print HTML — 100x100mm label
+  const handlePrint = () => {
+    const barcodeCanvas = barcodeRef.current
+    const barcodeDataUrl = barcodeCanvas ? barcodeCanvas.toDataURL("image/png") : ""
+
+    const rows = enabledFields
+      .filter((f) => f.value.trim())
+      .map(
+        (f) => `
+        <tr>
+          <td style="font-weight:700;color:#374151;width:38%;padding:1.5px 0;font-size:6.5pt;white-space:nowrap">${f.label}</td>
+          <td style="color:#111827;padding:1.5px 0;font-size:6.5pt">${f.value}</td>
+        </tr>`,
+      )
+      .join("")
+
+    const labelHtml = `
+      <div style="
+        width:100mm;height:100mm;
+        border:1px solid #d1d5db;
+        border-radius:3mm;
+        padding:4mm;
+        box-sizing:border-box;
+        font-family:'Segoe UI',Arial,sans-serif;
+        background:#fff;
+        display:flex;
+        flex-direction:column;
+        gap:2mm;
+        page-break-after:always;
+      ">
+        <!-- Logo -->
+        <div style="text-align:center;border-bottom:0.4mm solid #e5e7eb;padding-bottom:2mm">
+          <img
+            src="/ruzgar-civata-logo.jpeg"
+            style="height:14mm;object-fit:contain;"
+            crossorigin="anonymous"
+          />
+        </div>
+
+        <!-- Barcode -->
+        <div style="text-align:center">
+          <img src="${barcodeDataUrl}" style="height:12mm;width:100%;object-fit:fill;" />
+          <p style="font-size:6pt;font-family:monospace;color:#374151;margin:0.5mm 0 0;">${traceNo}</p>
+        </div>
+
+        <!-- Fields table -->
+        ${
+          rows
+            ? `<table style="width:100%;border-collapse:collapse">${rows}</table>`
+            : `<p style="font-size:7pt;color:#9ca3af;text-align:center;margin:2mm 0">Alan bilgisi girilmedi</p>`
+        }
+
+        <!-- Footer -->
+        <div style="margin-top:auto;border-top:0.4mm solid #e5e7eb;padding-top:1.5mm;text-align:center">
+          <p style="font-size:5.5pt;color:#9ca3af;margin:0">RÜZGAR CIVATA BAĞLANTI ELEMANLARI</p>
+        </div>
+      </div>
+    `
+
+    const labelsHtml = Array(copies).fill(labelHtml).join("")
+
+    const win = window.open("", "_blank", "width=700,height=800")
+    if (!win) return
+    win.document.write(`<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Traceability Etiket — ${traceNo}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:#f3f4f6;display:flex;flex-wrap:wrap;gap:5mm;padding:10mm;justify-content:flex-start;}
+    @media print{
+      body{background:#fff;padding:0;gap:3mm;}
+      @page{size:100mm 100mm;margin:0;}
+    }
+  </style>
+</head>
+<body>
+  ${labelsHtml}
+  <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>
+</body>
+</html>`)
+    win.document.close()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <h2 className="text-base font-bold text-foreground">Traceability Etiket</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">100 × 100 mm baskı formatı</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-1 overflow-hidden">
+          {/* LEFT — Form */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+            {/* Trace number */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+                Traceability No
+              </label>
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 px-3 py-2 rounded-lg bg-muted/40 border border-border font-mono text-sm text-foreground select-all">
+                  {traceNo}
+                </div>
+                <button
+                  onClick={regenerate}
+                  className="p-2 rounded-lg bg-muted/40 border border-border hover:border-primary/50 hover:text-primary transition-colors"
+                  title="Yeni numara üret"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">Her baskıda otomatik üretilir. Yenilemek için ikon.</p>
+            </div>
+
+            {/* Enabled fields */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
+                Alanlar
+              </label>
+              <div className="space-y-2">
+                {enabledFields.map((field) => (
+                  <div key={field.id} className="flex gap-2 items-center group">
+                    <label className="w-20 shrink-0 text-xs text-muted-foreground">{field.label}</label>
+                    <input
+                      type="text"
+                      value={field.value}
+                      onChange={(e) => updateField(field.id, e.target.value)}
+                      placeholder={`${field.label} girin...`}
+                      className="flex-1 text-xs px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                    />
+                    <button
+                      onClick={() => toggleField(field.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all"
+                      title="Alanı kaldır"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Add field toggle */}
+            {disabledFields.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowFieldMenu((v) => !v)}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Alan Ekle
+                  {showFieldMenu ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+                {showFieldMenu && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {disabledFields.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => { toggleField(f.id); setShowFieldMenu(false) }}
+                        className="px-2.5 py-1 rounded-full text-xs border border-border bg-muted/30 hover:border-primary/50 hover:text-primary transition-colors"
+                      >
+                        + {f.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Copies */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+                Kopya Sayısı
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCopies((c) => Math.max(1, c - 1))}
+                  className="w-8 h-8 rounded-lg border border-border bg-muted/40 hover:bg-muted flex items-center justify-center text-lg font-bold transition-colors"
+                >
+                  −
+                </button>
+                <span className="w-10 text-center text-sm font-semibold">{copies}</span>
+                <button
+                  onClick={() => setCopies((c) => Math.min(20, c + 1))}
+                  className="w-8 h-8 rounded-lg border border-border bg-muted/40 hover:bg-muted flex items-center justify-center text-lg font-bold transition-colors"
+                >
+                  +
+                </button>
+                <span className="text-xs text-muted-foreground ml-1">adet</span>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT — Preview */}
+          <div className="w-56 shrink-0 border-l border-border bg-muted/10 px-4 py-4 flex flex-col items-center gap-3 overflow-y-auto">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Önizleme</p>
+
+            {/* 100x100mm preview scaled to fit panel */}
+            <div
+              ref={previewRef}
+              className="w-full aspect-square bg-white rounded-lg border border-border shadow-sm overflow-hidden flex flex-col p-2 text-black"
+              style={{ fontSize: "6px" }}
+            >
+              {/* Logo */}
+              <div className="flex justify-center pb-1 border-b border-gray-200 mb-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/ruzgar-civata-logo.jpeg"
+                  alt="Rüzgar Civata Logo"
+                  className="h-7 object-contain"
+                />
+              </div>
+
+              {/* Barcode */}
+              <div className="flex flex-col items-center mb-1">
+                <canvas
+                  ref={barcodeRef}
+                  width={400}
+                  height={80}
+                  className="w-full"
+                  style={{ imageRendering: "pixelated" }}
+                />
+                <p className="font-mono mt-0.5" style={{ fontSize: "5px" }}>{traceNo}</p>
+              </div>
+
+              {/* Fields */}
+              <div className="flex-1 overflow-hidden">
+                <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                  <tbody>
+                    {enabledFields.filter((f) => f.value.trim()).map((f) => (
+                      <tr key={f.id}>
+                        <td className="font-bold text-gray-600 pr-1 whitespace-nowrap" style={{ width: "38%" }}>{f.label}</td>
+                        <td className="text-gray-900">{f.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-gray-200 pt-0.5 mt-auto text-center" style={{ fontSize: "4.5px" }}>
+                <span className="text-gray-400">RÜZGAR CIVATA BAĞLANTI ELEMANLARI</span>
+              </div>
+            </div>
+
+            <p className="text-[9px] text-muted-foreground text-center leading-relaxed">
+              Gerçek boyut: 100×100 mm<br />Değerler girilince güncellenir
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-3 bg-background">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Kapat
+          </Button>
+          <Button
+            onClick={handlePrint}
+            className="flex items-center gap-2 bg-primary"
+          >
+            <Printer className="h-4 w-4" />
+            {copies > 1 ? `${copies} Etiket Yazdır` : "Yazdır / PDF"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
