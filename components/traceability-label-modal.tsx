@@ -10,6 +10,7 @@ interface LabelField {
   label: string
   value: string
   enabled: boolean
+  big?: boolean // show as large headline
 }
 
 interface TraceabilityLabelModalProps {
@@ -24,142 +25,162 @@ function generateTraceNumber(): string {
 }
 
 const DEFAULT_FIELDS: LabelField[] = [
-  { id: "urun",    label: "Ürün Adı",  value: "",  enabled: true  },
-  { id: "olcu",    label: "Ölçü",      value: "",  enabled: true  },
-  { id: "malzeme", label: "Malzeme",   value: "",  enabled: true  },
-  { id: "kg",      label: "KG",        value: "",  enabled: true  },
-  { id: "adet",    label: "Adet",      value: "",  enabled: true  },
-  { id: "alici",   label: "Alıcı",     value: "",  enabled: false },
-  { id: "tarih",   label: "Tarih",     value: new Date().toLocaleDateString("tr-TR"), enabled: true },
-  { id: "not",     label: "Not",       value: "",  enabled: false },
+  { id: "urun",     label: "Ürün Adı",   value: "", enabled: true,  big: true  },
+  { id: "olcu",     label: "Ölçü",       value: "", enabled: true,  big: false },
+  { id: "malzeme",  label: "Malzeme",    value: "", enabled: true,  big: false },
+  { id: "kg",       label: "KG",         value: "", enabled: true,  big: false },
+  { id: "adet",     label: "Adet",       value: "", enabled: true,  big: false },
+  { id: "alici",    label: "Alıcı",      value: "", enabled: false, big: false },
+  { id: "siparis",  label: "Sipariş No", value: "", enabled: false, big: false },
+  { id: "lot",      label: "Lot",        value: "", enabled: false, big: false },
+  { id: "tarih",    label: "Tarih",      value: new Date().toLocaleDateString("tr-TR"), enabled: true, big: false },
+  { id: "not",      label: "Not",        value: "", enabled: false, big: false },
 ]
 
 export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelModalProps) {
-  const [traceNo, setTraceNo] = useState(generateTraceNumber())
-  const [fields, setFields] = useState<LabelField[]>(DEFAULT_FIELDS)
-  const [copies, setCopies] = useState(1)
+  const [traceNo, setTraceNo]     = useState(generateTraceNumber())
+  const [fields, setFields]       = useState<LabelField[]>(DEFAULT_FIELDS)
+  const [copies, setCopies]       = useState(1)
   const [showFieldMenu, setShowFieldMenu] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState("")
   const qrCanvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Render QR code to canvas and also capture data URL for print
   useEffect(() => {
     const canvas = qrCanvasRef.current
     if (!canvas) return
     QRCode.toCanvas(canvas, traceNo, {
-      width: 200,
+      width: 300,
       margin: 1,
       color: { dark: "#000000", light: "#ffffff" },
       errorCorrectionLevel: "M",
     }, (err) => {
-      if (!err) {
-        setQrDataUrl(canvas.toDataURL("image/png"))
-      }
+      if (!err) setQrDataUrl(canvas.toDataURL("image/png"))
     })
   }, [traceNo])
 
   const regenerate = () => setTraceNo(generateTraceNumber())
+
   const updateField = (id: string, value: string) =>
     setFields((f) => f.map((field) => (field.id === id ? { ...field, value } : field)))
+
   const toggleField = (id: string) =>
     setFields((f) => f.map((field) => (field.id === id ? { ...field, enabled: !field.enabled } : field)))
 
-  const enabledFields = fields.filter((f) => f.enabled)
+  const enabledFields  = fields.filter((f) => f.enabled)
   const disabledFields = fields.filter((f) => !f.enabled)
-  const filledFields = enabledFields.filter((f) => f.value.trim())
 
+  // --- build print HTML ---
   const handlePrint = () => {
     const logoUrl = `${window.location.origin}/ruzgar-civata-logo.png`
-    // 100mm @ 96dpi = 378px
-    const PX = 378
+    // 100mm at 96dpi = 378px
+    const S = 378
 
-    const rowsHtml = filledFields
-      .map(
-        (f) => `
-        <tr>
-          <td style="font-weight:700;color:#111;width:40%;padding:4px 6px 4px 0;font-size:15px;white-space:nowrap;vertical-align:top;border-bottom:1px solid #f3f4f6;">${f.label}</td>
-          <td style="color:#111;padding:4px 0;font-size:15px;vertical-align:top;border-bottom:1px solid #f3f4f6;">${f.value}</td>
-        </tr>`,
-      )
-      .join("")
+    const bigField   = enabledFields.find((f) => f.big && f.value.trim())
+    const restFields = enabledFields.filter((f) => !f.big && f.value.trim())
+    const dateField  = restFields.find((f) => f.id === "tarih")
+    const mainFields = restFields.filter((f) => f.id !== "tarih")
+
+    const mainRows = mainFields.map((f) =>
+      `<tr>
+        <td style="font-weight:700;font-size:15px;white-space:nowrap;padding:3px 8px 3px 0;vertical-align:top;color:#111;">${f.label}</td>
+        <td style="font-size:15px;padding:3px 0;vertical-align:top;color:#111;">${f.value}</td>
+       </tr>`
+    ).join("")
 
     const labelHtml = `
-      <div style="
-        width:${PX}px;height:${PX}px;
-        padding:14px 16px 12px 16px;
-        box-sizing:border-box;
-        font-family:'Segoe UI',Arial,sans-serif;
-        background:#fff;
-        display:flex;
-        flex-direction:column;
-        overflow:hidden;
-      ">
-        <!-- Logo row -->
-        <div style="display:flex;align-items:center;justify-content:center;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:8px;flex-shrink:0;">
-          <img src="${logoUrl}" style="height:72px;max-width:${PX - 32}px;object-fit:contain;" />
-        </div>
+<div style="
+  width:${S}px;height:${S}px;
+  box-sizing:border-box;
+  font-family:'Segoe UI',Arial,sans-serif;
+  background:#fff;
+  display:flex;
+  flex-direction:row;
+  overflow:hidden;
+  position:relative;
+">
+  <!-- LEFT STRIP: rotated logo -->
+  <div style="
+    width:52px;
+    background:#fff;
+    border-right:2px solid #111;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    padding:8px 0;
+  ">
+    <img src="${logoUrl}"
+      style="
+        width:${S - 80}px;
+        height:40px;
+        object-fit:contain;
+        transform:rotate(-90deg);
+        transform-origin:center center;
+        display:block;
+      "
+    />
+  </div>
 
-        <!-- QR + Trace no row -->
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-shrink:0;">
-          <div style="flex-shrink:0;">
-            <img src="${qrDataUrl}" style="width:90px;height:90px;display:block;" />
-          </div>
-          <div style="flex:1;overflow:hidden;">
-            <p style="font-size:9px;color:#888;margin:0 0 3px;text-transform:uppercase;letter-spacing:0.5px;">Traceability No</p>
-            <p style="font-size:11px;font-family:'Courier New',monospace;color:#111;font-weight:700;word-break:break-all;line-height:1.4;">${traceNo}</p>
-          </div>
-        </div>
+  <!-- MAIN CONTENT -->
+  <div style="flex:1;display:flex;flex-direction:column;padding:14px 14px 10px 14px;overflow:hidden;">
 
-        <!-- Divider -->
-        <div style="border-top:1.5px solid #111;margin-bottom:7px;flex-shrink:0;"></div>
+    <!-- Big product name -->
+    <div style="flex-shrink:0;margin-bottom:10px;border-bottom:2px solid #111;padding-bottom:8px;">
+      ${bigField
+        ? `<p style="font-size:26px;font-weight:900;color:#111;line-height:1.15;word-break:break-word;margin:0;">${bigField.value}</p>
+           <p style="font-size:11px;color:#555;margin:2px 0 0;">${bigField.label}</p>`
+        : `<p style="font-size:20px;font-weight:900;color:#bbb;margin:0;">Ürün adı girilmedi</p>`
+      }
+    </div>
 
-        <!-- Fields table -->
-        <div style="flex:1;overflow:hidden;">
-          ${
-            rowsHtml
-              ? `<table style="width:100%;border-collapse:collapse;">${rowsHtml}</table>`
-              : `<p style="font-size:13px;color:#9ca3af;text-align:center;margin:10px 0;">Alan bilgisi girilmedi</p>`
-          }
-        </div>
+    <!-- Main fields -->
+    <div style="flex:1;overflow:hidden;margin-bottom:8px;">
+      ${mainRows
+        ? `<table style="width:100%;border-collapse:collapse;">${mainRows}</table>`
+        : ""
+      }
+    </div>
 
-        <!-- Footer -->
-        <div style="border-top:1px solid #d1d5db;padding-top:5px;text-align:center;flex-shrink:0;margin-top:auto;">
-          <p style="font-size:10px;color:#6b7280;margin:0;letter-spacing:0.5px;font-weight:600;">RÜZGAR CIVATA BAĞLANTI ELEMANLARI</p>
-        </div>
+    <!-- Bottom row: QR + trace no + date -->
+    <div style="display:flex;align-items:flex-end;gap:10px;border-top:1.5px solid #111;padding-top:8px;flex-shrink:0;">
+      <img src="${qrDataUrl}" style="width:72px;height:72px;display:block;flex-shrink:0;" />
+      <div style="flex:1;overflow:hidden;">
+        <p style="font-size:8px;color:#777;margin:0 0 2px;text-transform:uppercase;letter-spacing:0.5px;">Traceability No</p>
+        <p style="font-size:9.5px;font-family:'Courier New',monospace;font-weight:700;color:#111;word-break:break-all;line-height:1.4;margin:0;">${traceNo}</p>
+        ${dateField ? `<p style="font-size:10px;color:#555;margin:4px 0 0;">Üretim tarihi: ${dateField.value}</p>` : ""}
       </div>
-    `
+    </div>
+
+  </div>
+</div>`
 
     const labelsHtml = Array(copies).fill(labelHtml).join("")
     const win = window.open("", "_blank", "width=520,height=620")
     if (!win) return
 
     win.document.write(`<!DOCTYPE html>
-<html lang="tr">
-<head>
+<html lang="tr"><head>
   <meta charset="UTF-8"/>
   <title>Traceability — ${traceNo}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     @page{size:100mm 100mm;margin:0;}
-    html,body{width:${PX}px;background:#fff;margin:0;padding:0;}
-    body{display:block;}
+    html,body{width:${S}px;background:#fff;margin:0;padding:0;}
     @media print{
       *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      html,body{width:${PX}px;margin:0;padding:0;}
+      html,body{width:${S}px;margin:0;padding:0;}
     }
   </style>
-</head>
-<body>
+</head><body>
   ${labelsHtml}
   <script>
-    var imgs = document.querySelectorAll('img');
-    var total = imgs.length; var loaded = 0;
-    function tryPrint(){ loaded++; if(loaded>=total){ setTimeout(function(){ window.print(); window.onafterprint=function(){window.close();}; },300); } }
-    if(total===0){ setTimeout(function(){ window.print(); window.onafterprint=function(){window.close();}; },300); }
-    else{ imgs.forEach(function(img){ if(img.complete&&img.naturalWidth>0){tryPrint();}else{img.onload=tryPrint;img.onerror=tryPrint;} }); }
+    var imgs=document.querySelectorAll('img');
+    var total=imgs.length,loaded=0;
+    function tryPrint(){loaded++;if(loaded>=total){setTimeout(function(){window.print();window.onafterprint=function(){window.close();};},300);}}
+    if(total===0){setTimeout(function(){window.print();window.onafterprint=function(){window.close();};},300);}
+    else{imgs.forEach(function(img){if(img.complete&&img.naturalWidth>0){tryPrint();}else{img.onload=tryPrint;img.onerror=tryPrint;}});}
   <\/script>
-</body>
-</html>`)
+</body></html>`)
     win.document.close()
   }
 
@@ -179,7 +200,8 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* LEFT — Form */}
+
+          {/* LEFT FORM */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
             {/* Trace number */}
@@ -188,7 +210,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                 Traceability No
               </label>
               <div className="flex gap-2 items-center">
-                <div className="flex-1 px-3 py-2 rounded-lg bg-muted/40 border border-border font-mono text-sm text-foreground select-all">
+                <div className="flex-1 px-3 py-2 rounded-lg bg-muted/40 border border-border font-mono text-sm text-foreground select-all truncate">
                   {traceNo}
                 </div>
                 <button
@@ -199,10 +221,9 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                   <RefreshCw className="h-4 w-4" />
                 </button>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">Otomatik üretilir. Yenilemek için yenile ikonuna tıkla.</p>
             </div>
 
-            {/* Enabled fields */}
+            {/* Fields */}
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
                 Alanlar
@@ -210,18 +231,23 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
               <div className="space-y-2">
                 {enabledFields.map((field) => (
                   <div key={field.id} className="flex gap-2 items-center group">
-                    <label className="w-20 shrink-0 text-xs text-muted-foreground">{field.label}</label>
+                    <label className="w-24 shrink-0 text-xs text-muted-foreground leading-tight">
+                      {field.label}
+                      {field.big && (
+                        <span className="ml-1 text-[9px] bg-primary/15 text-primary px-1 rounded">Ana Başlık</span>
+                      )}
+                    </label>
                     <input
                       type="text"
                       value={field.value}
                       onChange={(e) => updateField(field.id, e.target.value)}
-                      placeholder={`${field.label} girin...`}
+                      placeholder={`${field.label}...`}
                       className="flex-1 text-xs px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                     />
                     <button
                       onClick={() => toggleField(field.id)}
                       className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all"
-                      title="Alanı kaldır"
+                      title="Kaldır"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -265,14 +291,14 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setCopies((c) => Math.max(1, c - 1))}
-                  className="w-8 h-8 rounded-lg border border-border bg-muted/40 hover:bg-muted flex items-center justify-center text-lg font-bold transition-colors"
+                  className="w-8 h-8 rounded-lg border border-border bg-muted/40 hover:bg-muted flex items-center justify-center text-base font-bold transition-colors"
                 >
                   −
                 </button>
                 <span className="w-10 text-center text-sm font-semibold">{copies}</span>
                 <button
                   onClick={() => setCopies((c) => Math.min(20, c + 1))}
-                  className="w-8 h-8 rounded-lg border border-border bg-muted/40 hover:bg-muted flex items-center justify-center text-lg font-bold transition-colors"
+                  className="w-8 h-8 rounded-lg border border-border bg-muted/40 hover:bg-muted flex items-center justify-center text-base font-bold transition-colors"
                 >
                   +
                 </button>
@@ -281,67 +307,85 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
             </div>
           </div>
 
-          {/* RIGHT — Preview */}
-          <div className="w-60 shrink-0 border-l border-border bg-muted/10 px-4 py-4 flex flex-col items-center gap-3">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Önizleme (100×100mm)</p>
+          {/* RIGHT PREVIEW */}
+          <div className="w-64 shrink-0 border-l border-border bg-muted/10 px-4 py-4 flex flex-col items-center gap-3">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Önizleme</p>
 
-            <div className="w-full aspect-square bg-white rounded-lg border-2 border-border shadow overflow-hidden flex flex-col p-2 text-black">
-              {/* Logo */}
-              <div className="flex justify-center pb-1 border-b-2 border-black mb-1 flex-shrink-0">
+            {/* Preview card mimics the print layout */}
+            <div
+              className="w-full bg-white rounded border-2 border-border shadow overflow-hidden text-black flex flex-row"
+              style={{ aspectRatio: "1 / 1" }}
+            >
+              {/* Left strip */}
+              <div className="flex items-center justify-center flex-shrink-0 border-r-2 border-black"
+                style={{ width: "14%" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/ruzgar-civata-logo.png"
                   alt="Rüzgar Civata"
-                  className="h-8 object-contain"
+                  style={{
+                    width: "80px",
+                    height: "10px",
+                    objectFit: "contain",
+                    transform: "rotate(-90deg)",
+                  }}
                 />
               </div>
 
-              {/* QR + trace no */}
-              <div className="flex items-center gap-1.5 mb-1 flex-shrink-0">
-                <canvas
-                  ref={qrCanvasRef}
-                  className="shrink-0"
-                  style={{ width: "44px", height: "44px" }}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-mono font-bold leading-tight break-all" style={{ fontSize: "5px" }}>{traceNo}</p>
+              {/* Main */}
+              <div className="flex-1 flex flex-col p-1.5 overflow-hidden">
+                {/* Big title */}
+                <div className="border-b-2 border-black pb-1 mb-1 flex-shrink-0">
+                  {enabledFields.find((f) => f.big && f.value.trim()) ? (
+                    <p className="font-black leading-tight break-words" style={{ fontSize: "8px" }}>
+                      {enabledFields.find((f) => f.big)?.value}
+                    </p>
+                  ) : (
+                    <p className="text-gray-300 font-bold" style={{ fontSize: "7px" }}>Ürün adı...</p>
+                  )}
                 </div>
-              </div>
 
-              {/* Divider */}
-              <div className="border-t-2 border-black mb-1 flex-shrink-0" />
+                {/* Rest fields */}
+                <div className="flex-1 overflow-hidden mb-1">
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <tbody>
+                      {enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim()).map((f) => (
+                        <tr key={f.id}>
+                          <td className="font-bold text-gray-700 pr-1 whitespace-nowrap" style={{ fontSize: "5px", width: "40%" }}>{f.label}</td>
+                          <td className="text-gray-900" style={{ fontSize: "5px" }}>{f.value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Fields */}
-              <div className="flex-1 overflow-hidden">
-                <table className="w-full" style={{ borderCollapse: "collapse", fontSize: "5.5px" }}>
-                  <tbody>
-                    {enabledFields.filter((f) => f.value.trim()).map((f) => (
-                      <tr key={f.id}>
-                        <td className="font-bold pr-1 whitespace-nowrap text-gray-700" style={{ width: "40%" }}>{f.label}</td>
-                        <td className="text-gray-900">{f.value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-gray-300 pt-0.5 mt-auto text-center flex-shrink-0" style={{ fontSize: "4px" }}>
-                <span className="text-gray-500 font-semibold">RÜZGAR CIVATA BAĞLANTI ELEMANLARI</span>
+                {/* QR + trace no */}
+                <div className="border-t-2 border-black pt-1 flex items-end gap-1 flex-shrink-0">
+                  <canvas
+                    ref={qrCanvasRef}
+                    style={{ width: "22px", height: "22px", flexShrink: 0 }}
+                  />
+                  <div className="flex-1 overflow-hidden">
+                    <p className="font-mono font-bold leading-tight break-all" style={{ fontSize: "3.5px" }}>{traceNo}</p>
+                    {enabledFields.find((f) => f.id === "tarih" && f.value) && (
+                      <p className="text-gray-500 mt-0.5" style={{ fontSize: "3.5px" }}>
+                        Tarih: {enabledFields.find((f) => f.id === "tarih")?.value}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
             <p className="text-[9px] text-muted-foreground text-center leading-relaxed">
-              QR kod traceability numarasını içerir
+              Logo solda dikey, ürün adı büyük, QR sol altta
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-3 bg-background">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Kapat
-          </Button>
+        <div className="px-5 py-3 border-t border-border flex items-center justify-between bg-background">
+          <Button variant="outline" size="sm" onClick={onClose}>Kapat</Button>
           <Button onClick={handlePrint} className="flex items-center gap-2 bg-primary">
             <Printer className="h-4 w-4" />
             {copies > 1 ? `${copies} Etiket Yazdır` : "Yazdır / PDF"}
