@@ -99,70 +99,77 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     const dateField  = restFields.find((f) => f.id === "tarih")
     const mainFields = restFields.filter((f) => f.id !== "tarih")
 
-    // Info rows — label left, value right, both pure black bold
+    // Compact info rows — fit many fields inside 100x100mm
     const infoRows = mainFields.map((f) => `
       <tr>
-        <td style="font-size:14px;font-weight:700;color:#000;padding:4px 10px 4px 0;white-space:nowrap;vertical-align:top;width:38%;">${f.label}</td>
-        <td style="font-size:14px;font-weight:900;color:#000;padding:4px 0;vertical-align:top;">${f.value}</td>
+        <td style="font-size:12px;font-weight:700;color:#000;padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top;width:40%;">${f.label}</td>
+        <td style="font-size:12px;font-weight:900;color:#000;padding:2px 0;vertical-align:top;">${f.value}</td>
       </tr>`).join("")
 
+    const fieldCount = mainFields.length
+    // Scale product font based on text length AND field count — more fields = smaller title
     const productFontSize = bigField
-      ? (bigField.value.length > 24 ? 18 : bigField.value.length > 16 ? 22 : 26)
+      ? (fieldCount > 4 ? 18 : bigField.value.length > 20 ? 18 : bigField.value.length > 12 ? 22 : 26)
       : 18
 
     const labelHtml = `
 <div style="
   width:${S}px;
-  min-height:${S}px;
-  padding:10px 14px;
+  height:${S}px;
+  padding:8px 12px;
   box-sizing:border-box;
   font-family:Arial,Helvetica,sans-serif;
   background:#ffffff;
-  display:block;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
 ">
 
-  <!-- ① LOGO -->
+  <!-- ① LOGO: border box, fixed height -->
   <div style="
-    border:3px solid #000;
-    padding:4px;
+    border:2px solid #000;
+    padding:3px 6px;
     display:flex;
     align-items:center;
     justify-content:center;
-    height:90px;
-    margin-bottom:8px;
+    height:68px;
+    flex-shrink:0;
+    margin-bottom:6px;
     overflow:hidden;
   ">
-    <img src="${logoUrl}" style="width:100%;height:82px;object-fit:contain;display:block;" />
+    <img src="${logoUrl}" style="width:100%;height:60px;object-fit:contain;display:block;" />
   </div>
 
   <!-- ② ÜRÜN ADI -->
-  <div style="border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:6px;">
-    <div style="font-size:9px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">URUN / PRODUCT</div>
+  <div style="border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:4px;flex-shrink:0;">
+    <div style="font-size:8px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">URUN / PRODUCT</div>
     <div style="font-size:${productFontSize}px;font-weight:900;color:#000;line-height:1.1;word-break:break-word;">
       ${bigField ? bigField.value : "—"}
     </div>
   </div>
 
-  <!-- ③ BİLGİ SATIRLARI — tüm alanlar, hiç kesilmez -->
-  ${infoRows
-    ? `<table style="width:100%;border-collapse:collapse;margin-bottom:8px;">${infoRows}</table>`
-    : ""}
+  <!-- ③ BİLGİ SATIRLARI — flex:1 ile kalan alanı doldurur -->
+  <div style="flex:1;overflow:hidden;margin-bottom:4px;">
+    ${infoRows
+      ? `<table style="width:100%;border-collapse:collapse;">${infoRows}</table>`
+      : ""}
+  </div>
 
   <!-- ④ FOOTER: QR + trace no + tarih -->
   <div style="
     display:flex;
     align-items:center;
-    gap:12px;
+    gap:10px;
     border-top:2px solid #000;
-    padding-top:8px;
-    margin-top:4px;
+    padding-top:6px;
+    flex-shrink:0;
   ">
-    <img src="${qrDataUrl}" style="width:80px;height:80px;flex-shrink:0;display:block;" />
-    <div style="flex:1;">
-      <div style="font-size:9px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">TRACEABILITY NO</div>
-      <div style="font-size:11px;font-family:'Courier New',Courier,monospace;font-weight:700;color:#000;word-break:break-all;line-height:1.4;">${traceNo}</div>
+    <img src="${qrDataUrl}" style="width:68px;height:68px;flex-shrink:0;display:block;" />
+    <div style="flex:1;overflow:hidden;">
+      <div style="font-size:8px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">TRACEABILITY NO</div>
+      <div style="font-size:10px;font-family:'Courier New',Courier,monospace;font-weight:700;color:#000;word-break:break-all;line-height:1.3;">${traceNo}</div>
       ${dateField
-        ? `<div style="font-size:13px;font-weight:700;color:#000;margin-top:4px;">Tarih: ${dateField.value}</div>`
+        ? `<div style="font-size:12px;font-weight:700;color:#000;margin-top:3px;">Tarih: ${dateField.value}</div>`
         : ""}
     </div>
   </div>
