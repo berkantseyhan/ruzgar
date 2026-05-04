@@ -134,53 +134,62 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
       )
       .join("")
 
+    // 100mm = 378px at 96dpi. Use px everywhere so browser respects sizes.
+    const PX = 378
+
+    const rowsHtml = filledFields
+      .map(
+        (f) => `
+        <tr>
+          <td style="font-weight:700;color:#111;width:42%;padding:3px 4px 3px 0;font-size:13px;white-space:nowrap;vertical-align:top">${f.label}</td>
+          <td style="color:#111;padding:3px 0;font-size:13px;vertical-align:top">${f.value}</td>
+        </tr>`,
+      )
+      .join("")
+
     const labelHtml = `
       <div style="
-        width:100mm;min-height:100mm;
-        padding:5mm;
+        width:${PX}px;height:${PX}px;
+        padding:16px;
         box-sizing:border-box;
         font-family:'Segoe UI',Arial,sans-serif;
         background:#fff;
         display:flex;
         flex-direction:column;
-        page-break-after:always;
+        overflow:hidden;
       ">
         <!-- Logo -->
-        <div style="text-align:center;border-bottom:0.5mm solid #d1d5db;padding-bottom:2mm;margin-bottom:2mm;flex-shrink:0">
-          <img
-            src="${logoUrl}"
-            style="height:16mm;max-width:80mm;object-fit:contain;"
-          />
+        <div style="text-align:center;border-bottom:1px solid #d1d5db;padding-bottom:6px;margin-bottom:6px;flex-shrink:0;">
+          <img src="${logoUrl}" style="height:52px;max-width:280px;object-fit:contain;" />
         </div>
 
         <!-- Barcode -->
-        <div style="text-align:center;flex-shrink:0;margin-bottom:1.5mm">
-          <img src="${barcodeDataUrl}" style="height:14mm;width:86mm;display:block;margin:0 auto;" />
-          <p style="font-size:7pt;font-family:'Courier New',monospace;color:#374151;margin:1mm 0 0;letter-spacing:0.5px">${traceNo}</p>
+        <div style="text-align:center;flex-shrink:0;margin-bottom:4px;">
+          <img src="${barcodeDataUrl}" style="height:46px;width:${PX - 40}px;display:block;margin:0 auto;" />
+          <p style="font-size:9px;font-family:'Courier New',monospace;color:#555;margin:2px 0 0;letter-spacing:1px;">${traceNo}</p>
         </div>
 
         <!-- Divider -->
-        <div style="border-top:0.4mm solid #e5e7eb;margin-bottom:2mm;flex-shrink:0"></div>
+        <div style="border-top:1px solid #e5e7eb;margin-bottom:6px;flex-shrink:0;"></div>
 
         <!-- Fields table -->
-        <div style="flex:1;overflow:hidden">
-          ${
-            rows
-              ? `<table style="width:100%;border-collapse:collapse">${rows}</table>`
-              : `<p style="font-size:8pt;color:#9ca3af;text-align:center;margin:3mm 0">—</p>`
+        <div style="flex:1;overflow:hidden;">
+          ${rowsHtml
+            ? `<table style="width:100%;border-collapse:collapse;">${rowsHtml}</table>`
+            : `<p style="font-size:12px;color:#9ca3af;text-align:center;margin:8px 0;">—</p>`
           }
         </div>
 
         <!-- Footer -->
-        <div style="border-top:0.4mm solid #e5e7eb;padding-top:1.5mm;text-align:center;flex-shrink:0">
-          <p style="font-size:6.5pt;color:#9ca3af;margin:0;letter-spacing:0.3px">RÜZGAR CIVATA BAĞLANTI ELEMANLARI</p>
+        <div style="border-top:1px solid #e5e7eb;padding-top:4px;text-align:center;flex-shrink:0;margin-top:auto;">
+          <p style="font-size:9px;color:#9ca3af;margin:0;letter-spacing:0.3px;">RÜZGAR CIVATA BAĞLANTI ELEMANLARI</p>
         </div>
       </div>
     `
 
     const labelsHtml = Array(copies).fill(labelHtml).join("")
 
-    const win = window.open("", "_blank", "width=700,height=800")
+    const win = window.open("", "_blank", "width=500,height=600")
     if (!win) return
     win.document.write(`<!DOCTYPE html>
 <html lang="tr">
@@ -190,22 +199,26 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     @page{size:100mm 100mm;margin:0;}
-    body{background:#f3f4f6;display:flex;flex-wrap:wrap;gap:5mm;padding:10mm;justify-content:flex-start;align-items:flex-start;}
+    html,body{width:${PX}px;background:#fff;}
+    body{display:block;}
     @media print{
       *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      html,body{background:#fff;padding:0;margin:0;width:100mm;}
+      html,body{width:${PX}px;margin:0;padding:0;background:#fff;}
     }
   </style>
 </head>
 <body>
   ${labelsHtml}
   <script>
-    // Wait for logo to load before printing
     var imgs = document.querySelectorAll('img');
+    var total = imgs.length;
     var loaded = 0;
-    function tryPrint(){ if(++loaded >= imgs.length){ window.print(); window.onafterprint=function(){window.close();}; } }
-    if(imgs.length === 0){ window.print(); window.onafterprint=function(){window.close();}; }
-    else { imgs.forEach(function(img){ if(img.complete){ tryPrint(); } else { img.onload=tryPrint; img.onerror=tryPrint; } }); }
+    function tryPrint(){
+      loaded++;
+      if(loaded >= total){ setTimeout(function(){ window.print(); window.onafterprint=function(){window.close();}; }, 200); }
+    }
+    if(total === 0){ setTimeout(function(){ window.print(); window.onafterprint=function(){window.close();}; }, 200); }
+    else { imgs.forEach(function(img){ if(img.complete && img.naturalWidth > 0){ tryPrint(); } else { img.onload=tryPrint; img.onerror=tryPrint; } }); }
   <\/script>
 </body>
 </html>`)
