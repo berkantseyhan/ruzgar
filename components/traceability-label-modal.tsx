@@ -43,19 +43,32 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   const [copies, setCopies]       = useState(1)
   const [showFieldMenu, setShowFieldMenu] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState("")
-  const qrCanvasRef = useRef<HTMLCanvasElement>(null)
+  const qrPreviewRef = useRef<HTMLCanvasElement>(null)  // small preview canvas
+  const qrPrintRef  = useRef<HTMLCanvasElement>(null)   // large print canvas (hidden)
 
   useEffect(() => {
-    const canvas = qrCanvasRef.current
-    if (!canvas) return
-    QRCode.toCanvas(canvas, traceNo, {
-      width: 300,
-      margin: 1,
-      color: { dark: "#000000", light: "#ffffff" },
-      errorCorrectionLevel: "M",
-    }, (err) => {
-      if (!err) setQrDataUrl(canvas.toDataURL("image/png"))
-    })
+    // Render small version for preview (56px)
+    const previewCanvas = qrPreviewRef.current
+    if (previewCanvas) {
+      QRCode.toCanvas(previewCanvas, traceNo, {
+        width: 56,
+        margin: 1,
+        color: { dark: "#000000", light: "#ffffff" },
+        errorCorrectionLevel: "M",
+      })
+    }
+    // Render large version for print data URL (300px)
+    const printCanvas = qrPrintRef.current
+    if (printCanvas) {
+      QRCode.toCanvas(printCanvas, traceNo, {
+        width: 300,
+        margin: 1,
+        color: { dark: "#000000", light: "#ffffff" },
+        errorCorrectionLevel: "M",
+      }, (err) => {
+        if (!err) setQrDataUrl(printCanvas.toDataURL("image/png"))
+      })
+    }
   }, [traceNo])
 
   const regenerate = () => setTraceNo(generateTraceNumber())
@@ -361,9 +374,9 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                   </table>
                 </div>
 
-                {/* Footer: QR + trace — QR fixed 32x32 */}
+                {/* Footer: QR + trace — preview canvas fixed 56x56 */}
                 <div style={{ borderTop: "1px solid #000", paddingTop: 3, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                  <canvas ref={qrCanvasRef} width={32} height={32} style={{ width: 32, height: 32, flexShrink: 0, imageRendering: "pixelated" }} />
+                  <canvas ref={qrPreviewRef} style={{ width: 56, height: 56, flexShrink: 0 }} />
                   <div style={{ flex: 1, overflow: "hidden" }}>
                     <div style={{ fontSize: 3.5, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, marginBottom: 1 }}>TRACEABILITY NO</div>
                     <div style={{ fontSize: 4, fontFamily: "monospace", fontWeight: 700, color: "#000", wordBreak: "break-all" as const, lineHeight: 1.3 }}>{traceNo}</div>
@@ -382,6 +395,9 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
             </p>
           </div>
         </div>
+
+        {/* Hidden canvas used only to generate print-quality QR data URL */}
+        <canvas ref={qrPrintRef} style={{ display: "none" }} />
 
         {/* Footer */}
         <div className="px-5 py-3 border-t border-border flex items-center justify-between bg-background">
