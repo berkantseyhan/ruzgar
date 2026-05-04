@@ -327,56 +327,58 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
           <div className="w-64 shrink-0 border-l border-border bg-muted/10 px-4 py-4 flex flex-col items-center gap-3">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Önizleme</p>
 
-            {/* Preview — Zebra GC420t thermal optimized */}
-            <div
-              className="w-full overflow-hidden text-black flex flex-col"
-              style={{ aspectRatio: "1/1", background: "#fff", border: "2px solid #000", padding: "4px 5px" }}
-            >
-              {/* Logo box */}
-              <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: "30%", marginBottom: "4px", flexShrink: 0, padding: "2px", overflow: "hidden" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              </div>
-
-              {/* Product name */}
-              <div style={{ borderBottom: "1.5px solid #000", paddingBottom: "3px", marginBottom: "3px", flexShrink: 0 }}>
-                <div style={{ fontSize: "3.5px", fontWeight: 700, color: "#000", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "1px" }}>URUN / PRODUCT</div>
-                <div style={{ fontSize: "9px", fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" }}>
-                  {enabledFields.find((f) => f.big)?.value || "—"}
+            {/* Preview — fixed 220x220px so proportions are always correct */}
+            <div className="flex justify-center">
+              <div
+                className="overflow-hidden text-black flex flex-col"
+                style={{ width: 220, height: 220, background: "#fff", border: "2px solid #000", padding: "4px 5px", flexShrink: 0 }}
+              >
+                {/* Logo box — 60px tall out of 220 */}
+                <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: 60, marginBottom: 4, flexShrink: 0, padding: 2, overflow: "hidden" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 </div>
-              </div>
 
-              {/* Info rows */}
-              <div style={{ flex: 1, overflow: "hidden", marginBottom: "3px" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <tbody>
-                    {enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim()).map((f) => (
-                      <tr key={f.id}>
-                        <td style={{ fontSize: "5px", fontWeight: 700, color: "#000", paddingRight: "4px", whiteSpace: "nowrap", verticalAlign: "top", width: "38%" }}>{f.label}</td>
-                        <td style={{ fontSize: "5px", fontWeight: 900, color: "#000", verticalAlign: "top" }}>{f.value}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                {/* Product name */}
+                <div style={{ borderBottom: "1px solid #000", paddingBottom: 2, marginBottom: 2, flexShrink: 0 }}>
+                  <div style={{ fontSize: 4, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 1 }}>URUN / PRODUCT</div>
+                  <div style={{ fontSize: 9, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>
+                    {enabledFields.find((f) => f.big)?.value || "—"}
+                  </div>
+                </div>
 
-              {/* Footer: QR + trace */}
-              <div style={{ borderTop: "1.5px solid #000", paddingTop: "3px", display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
-                <canvas ref={qrCanvasRef} width={64} height={64} style={{ width: 24, height: 24, flexShrink: 0 }} />
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                  <div style={{ fontSize: "3px", fontWeight: 700, color: "#000", textTransform: "uppercase", marginBottom: "1px" }}>TRACEABILITY NO</div>
-                  <div style={{ fontSize: "3.5px", fontFamily: "monospace", fontWeight: 700, color: "#000", wordBreak: "break-all", lineHeight: 1.3 }}>{traceNo}</div>
-                  {enabledFields.find((f) => f.id === "tarih" && f.value) && (
-                    <div style={{ fontSize: "4px", fontWeight: 700, color: "#000", marginTop: "1px" }}>
-                      Tarih: {enabledFields.find((f) => f.id === "tarih")?.value}
-                    </div>
-                  )}
+                {/* Info rows */}
+                <div style={{ flex: 1, overflow: "hidden", marginBottom: 2 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" as const }}>
+                    <tbody>
+                      {enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim()).map((f) => (
+                        <tr key={f.id}>
+                          <td style={{ fontSize: 5, fontWeight: 700, color: "#000", paddingRight: 3, whiteSpace: "nowrap" as const, verticalAlign: "top" as const, width: "40%" }}>{f.label}</td>
+                          <td style={{ fontSize: 5, fontWeight: 900, color: "#000", verticalAlign: "top" as const }}>{f.value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer: QR + trace — QR fixed 32x32 */}
+                <div style={{ borderTop: "1px solid #000", paddingTop: 3, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                  <canvas ref={qrCanvasRef} width={32} height={32} style={{ width: 32, height: 32, flexShrink: 0, imageRendering: "pixelated" }} />
+                  <div style={{ flex: 1, overflow: "hidden" }}>
+                    <div style={{ fontSize: 3.5, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, marginBottom: 1 }}>TRACEABILITY NO</div>
+                    <div style={{ fontSize: 4, fontFamily: "monospace", fontWeight: 700, color: "#000", wordBreak: "break-all" as const, lineHeight: 1.3 }}>{traceNo}</div>
+                    {enabledFields.find((f) => f.id === "tarih" && f.value) && (
+                      <div style={{ fontSize: 4, fontWeight: 700, color: "#000", marginTop: 1 }}>
+                        Tarih: {enabledFields.find((f) => f.id === "tarih")?.value}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
             <p className="text-[9px] text-muted-foreground text-center leading-relaxed">
-              Zebra GC420t termal optimize &mdash; saf siyah, min 14px yazı
+              Zebra GC420t termal optimize &mdash; saf siyah, min 14px baskı
             </p>
           </div>
         </div>
