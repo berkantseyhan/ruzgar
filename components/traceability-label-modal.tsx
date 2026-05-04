@@ -111,17 +111,17 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
 
   <!-- ① LOGO — white bg, siyah logo, tam genişlik, net -->
   <div style="
-    border:2.5px solid #000;
-    padding:8px 12px;
+    border:3px solid #000;
+    padding:6px 10px;
     display:flex;
     align-items:center;
     justify-content:center;
     flex-shrink:0;
-    height:72px;
+    height:110px;
     margin-bottom:10px;
   ">
     <img src="${logoUrl}"
-      style="height:50px;max-width:${S - 60}px;object-fit:contain;"
+      style="width:${S - 60}px;height:94px;object-fit:contain;display:block;"
     />
   </div>
 
@@ -332,9 +332,9 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
               style={{ aspectRatio: "1/1", background: "#fff", border: "2px solid #000", padding: "4px 5px" }}
             >
               {/* Logo box */}
-              <div style={{ border: "1.5px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: "19%", marginBottom: "4px", flexShrink: 0, padding: "2px" }}>
+              <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: "27%", marginBottom: "4px", flexShrink: 0, padding: "3px" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ height: "100%", maxWidth: "90%", objectFit: "contain" }} />
+                <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
               </div>
 
               {/* Product name */}
