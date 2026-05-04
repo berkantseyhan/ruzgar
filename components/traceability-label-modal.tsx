@@ -120,7 +120,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     const barcodeDataUrl = barcodeCanvas ? barcodeCanvas.toDataURL("image/png") : ""
 
     // Absolute logo URL so print window can load it
-    const logoUrl = `${window.location.origin}/ruzgar-civata-logo.jpeg`
+    const logoUrl = `${window.location.origin}/ruzgar-civata-logo.png`
 
     const filledFields = enabledFields.filter((f) => f.value.trim())
 
@@ -136,13 +136,14 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
 
     const labelHtml = `
       <div style="
-        width:100mm;height:100mm;
-        padding:5mm 5mm 4mm 5mm;
+        width:100mm;min-height:100mm;
+        padding:5mm;
         box-sizing:border-box;
         font-family:'Segoe UI',Arial,sans-serif;
         background:#fff;
         display:flex;
         flex-direction:column;
+        page-break-after:always;
       ">
         <!-- Logo -->
         <div style="text-align:center;border-bottom:0.5mm solid #d1d5db;padding-bottom:2mm;margin-bottom:2mm;flex-shrink:0">
@@ -188,11 +189,11 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   <title>Traceability Etiket — ${traceNo}</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
+    @page{size:100mm 100mm;margin:0;}
     body{background:#f3f4f6;display:flex;flex-wrap:wrap;gap:5mm;padding:10mm;justify-content:flex-start;align-items:flex-start;}
     @media print{
       *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-      body{background:#fff;padding:0;margin:0;gap:0;}
-      @page{size:100mm 100mm;margin:0;}
+      html,body{background:#fff;padding:0;margin:0;width:100mm;}
     }
   </style>
 </head>
@@ -343,7 +344,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
               <div className="flex justify-center pb-1 border-b border-gray-200 mb-1">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/ruzgar-civata-logo.jpeg"
+                  src="/ruzgar-civata-logo.png"
                   alt="Rüzgar Civata Logo"
                   className="h-7 object-contain"
                 />
