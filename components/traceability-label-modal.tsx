@@ -99,15 +99,18 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     const dateField  = restFields.find((f) => f.id === "tarih")
     const mainFields = restFields.filter((f) => f.id !== "tarih")
 
-    // Compact info rows — fit many fields inside 100x100mm
-    const infoRows = mainFields.map((f) => `
-      <tr>
-        <td style="font-size:12px;font-weight:700;color:#000;padding:2px 8px 2px 0;white-space:nowrap;vertical-align:top;width:40%;">${f.label}</td>
-        <td style="font-size:12px;font-weight:900;color:#000;padding:2px 0;vertical-align:top;">${f.value}</td>
-      </tr>`).join("")
+    // 2-column grid cells — pairs fill the row, odd one spans full width
+    const gridCells = mainFields.map((f, i) => {
+      const isLast = i === mainFields.length - 1
+      const isOdd  = mainFields.length % 2 !== 0
+      const span   = isLast && isOdd ? "grid-column:1/3;" : ""
+      return `<div style="${span}padding:3px 6px 3px 0;">
+        <div style="font-size:9px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px;">${f.label}</div>
+        <div style="font-size:13px;font-weight:900;color:#000;line-height:1.1;word-break:break-word;">${f.value}</div>
+      </div>`
+    }).join("")
 
     const fieldCount = mainFields.length
-    // Scale product font based on text length AND field count — more fields = smaller title
     const productFontSize = bigField
       ? (fieldCount > 4 ? 18 : bigField.value.length > 20 ? 18 : bigField.value.length > 12 ? 22 : 26)
       : 18
@@ -148,12 +151,19 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     </div>
   </div>
 
-  <!-- ③ BİLGİ SATIRLARI — flex:1 ile kalan alanı doldurur -->
-  <div style="flex:1;overflow:hidden;margin-bottom:4px;">
-    ${infoRows
-      ? `<table style="width:100%;border-collapse:collapse;">${infoRows}</table>`
-      : ""}
+  <!-- ③ BİLGİ ALANLARI — 2 sütun grid, tek kalan alan tam genişlik -->
+  <div style="
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    column-gap:8px;
+    flex-shrink:0;
+    margin-bottom:4px;
+  ">
+    ${gridCells}
   </div>
+
+  <!-- spacer: QR'ı boşluk ne kadar olursa olsun aşağıya yasla -->
+  <div style="flex:1;min-height:4px;"></div>
 
   <!-- ④ FOOTER: QR + trace no + tarih -->
   <div style="
@@ -356,19 +366,29 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                   </div>
                 </div>
 
-                {/* Info rows */}
-                <div style={{ flex: 1, overflow: "hidden", marginBottom: 2 }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" as const }}>
-                    <tbody>
-                      {enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim()).map((f) => (
-                        <tr key={f.id}>
-                          <td style={{ fontSize: 5, fontWeight: 700, color: "#000", paddingRight: 3, whiteSpace: "nowrap" as const, verticalAlign: "top" as const, width: "40%" }}>{f.label}</td>
-                          <td style={{ fontSize: 5, fontWeight: 900, color: "#000", verticalAlign: "top" as const }}>{f.value}</td>
-                        </tr>
+                {/* Info grid — 2 columns, last odd item spans full width */}
+                {(() => {
+                  const infoFields = enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim())
+                  return (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 4, flexShrink: 0, marginBottom: 2 }}>
+                      {infoFields.map((f, i) => (
+                        <div
+                          key={f.id}
+                          style={{
+                            gridColumn: (i === infoFields.length - 1 && infoFields.length % 2 !== 0) ? "1/3" : undefined,
+                            padding: "1px 2px 1px 0",
+                          }}
+                        >
+                          <div style={{ fontSize: 3.5, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.3px" }}>{f.label}</div>
+                          <div style={{ fontSize: 5.5, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>{f.value}</div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Spacer pushes QR up to content */}
+                <div style={{ flex: 1, minHeight: 2 }} />
 
                 {/* Footer: QR + trace — preview canvas fixed 56x56 */}
                 <div style={{ borderTop: "1px solid #000", paddingTop: 3, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
