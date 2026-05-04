@@ -112,68 +112,57 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
 
     const labelHtml = `
 <div style="
-  width:${S}px;height:${S}px;
-  padding:14px 16px 12px 16px;
+  width:${S}px;
+  min-height:${S}px;
+  padding:10px 14px;
   box-sizing:border-box;
   font-family:Arial,Helvetica,sans-serif;
   background:#ffffff;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
+  display:block;
 ">
 
-  <!-- ① LOGO — white bg, siyah logo, tam genişlik, net -->
+  <!-- ① LOGO -->
   <div style="
     border:3px solid #000;
     padding:4px;
     display:flex;
     align-items:center;
     justify-content:center;
-    flex-shrink:0;
-    height:120px;
-    margin-bottom:10px;
+    height:90px;
+    margin-bottom:8px;
     overflow:hidden;
   ">
-    <img src="${logoUrl}"
-      style="width:100%;height:112px;object-fit:contain;display:block;"
-    />
+    <img src="${logoUrl}" style="width:100%;height:82px;object-fit:contain;display:block;" />
   </div>
 
-  <!-- ② ÜRÜN ADI — en büyük element -->
-  <div style="
-    border-bottom:3px solid #000;
-    padding-bottom:8px;
-    margin-bottom:8px;
-    flex-shrink:0;
-  ">
-    <div style="font-size:10px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">URUN / PRODUCT</div>
+  <!-- ② ÜRÜN ADI -->
+  <div style="border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:6px;">
+    <div style="font-size:9px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;">URUN / PRODUCT</div>
     <div style="font-size:${productFontSize}px;font-weight:900;color:#000;line-height:1.1;word-break:break-word;">
       ${bigField ? bigField.value : "—"}
     </div>
   </div>
 
-  <!-- ③ BİLGİ SATIRLARI -->
-  <div style="flex:1;overflow:hidden;margin-bottom:8px;">
-    ${infoRows
-      ? `<table style="width:100%;border-collapse:collapse;">${infoRows}</table>`
-      : ""}
-  </div>
+  <!-- ③ BİLGİ SATIRLARI — tüm alanlar, hiç kesilmez -->
+  ${infoRows
+    ? `<table style="width:100%;border-collapse:collapse;margin-bottom:8px;">${infoRows}</table>`
+    : ""}
 
   <!-- ④ FOOTER: QR + trace no + tarih -->
   <div style="
     display:flex;
     align-items:center;
     gap:12px;
-    border-top:3px solid #000;
+    border-top:2px solid #000;
     padding-top:8px;
-    flex-shrink:0;
+    margin-top:4px;
   ">
     <img src="${qrDataUrl}" style="width:80px;height:80px;flex-shrink:0;display:block;" />
-    <div style="flex:1;overflow:hidden;">
+    <div style="flex:1;">
       <div style="font-size:9px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">TRACEABILITY NO</div>
       <div style="font-size:11px;font-family:'Courier New',Courier,monospace;font-weight:700;color:#000;word-break:break-all;line-height:1.4;">${traceNo}</div>
       ${dateField
-        ? `<div style="font-size:13px;font-weight:700;color:#000;margin-top:5px;">Tarih: ${dateField.value}</div>`
+        ? `<div style="font-size:13px;font-weight:700;color:#000;margin-top:4px;">Tarih: ${dateField.value}</div>`
         : ""}
     </div>
   </div>
