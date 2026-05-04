@@ -125,19 +125,19 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   overflow:hidden;
 ">
 
-  <!-- ① LOGO: border box, fixed height -->
+  <!-- ① LOGO: border box, 4:1 ratio for 800x200 logo -->
   <div style="
     border:2px solid #000;
-    padding:3px 6px;
+    padding:4px;
     display:flex;
     align-items:center;
     justify-content:center;
-    height:68px;
+    height:88px;
     flex-shrink:0;
     margin-bottom:6px;
     overflow:hidden;
   ">
-    <img src="${logoUrl}" style="width:100%;height:60px;object-fit:contain;display:block;" />
+    <img src="${logoUrl}" style="width:100%;height:80px;object-fit:contain;display:block;" />
   </div>
 
   <!-- ② ÜRÜN ADI -->
@@ -342,8 +342,8 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                 className="overflow-hidden text-black flex flex-col"
                 style={{ width: 220, height: 220, background: "#fff", border: "2px solid #000", padding: "4px 5px", flexShrink: 0 }}
               >
-                {/* Logo box — 60px tall out of 220 */}
-                <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: 60, marginBottom: 4, flexShrink: 0, padding: 2, overflow: "hidden" }}>
+                {/* Logo box — 4:1 ratio, 220px wide container → ~55px tall */}
+                <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: 55, marginBottom: 4, flexShrink: 0, padding: 2, overflow: "hidden" }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 </div>
