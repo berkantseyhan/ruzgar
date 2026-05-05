@@ -49,12 +49,16 @@ const DEFAULT_FIELDS: LabelField[] = [
 function HistoryRow({
   record,
   onSave,
+  onDelete,
 }: {
   record: TraceabilityLabel
   onSave: (id: string, patch: Partial<TraceabilityLabel>) => Promise<boolean>
+  onDelete: (id: string) => Promise<boolean>
 }) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle")
   const [form, setForm] = useState({
     hammadde:           record.hammadde           ?? "",
@@ -67,6 +71,13 @@ function HistoryRow({
   })
 
   const isComplete = !!(form.hammadde.trim() && form.alici.trim())
+
+  const handleDelete = async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    setDeleting(true)
+    await onDelete(record.id)
+    setDeleting(false)
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -107,6 +118,39 @@ function HistoryRow({
         </div>
         <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${open ? "rotate-90" : ""}`} />
       </button>
+
+      {/* Delete controls — shown outside the accordion toggle */}
+      {open && (
+        <div className="flex items-center justify-end gap-2 px-4 py-1.5 bg-red-500/5 border-t border-red-500/10">
+          {confirmDelete ? (
+            <>
+              <span className="text-[11px] text-red-500 font-medium">Emin misiniz? Bu işlem geri alınamaz.</span>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-[11px] px-2.5 py-1 rounded-lg border border-border hover:bg-muted transition-colors text-muted-foreground"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors disabled:opacity-50"
+              >
+                <Trash2 className="h-3 w-3" />
+                {deleting ? "Siliniyor..." : "Evet, sil"}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
+            >
+              <Trash2 className="h-3 w-3" />
+              Kaydı sil
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Expanded form */}
       {open && (
@@ -262,6 +306,18 @@ function HistoryTab() {
   // Reset to page 1 when search changes
   useEffect(() => { setPage(1) }, [search])
 
+  const handleDelete = async (id: string): Promise<boolean> => {
+    const { error } = await supabase
+      .from(TABLES.TRACEABILITY_LABELS)
+      .delete()
+      .eq("id", id)
+    if (!error) {
+      setRecords((prev) => prev.filter((r) => r.id !== id))
+      return true
+    }
+    return false
+  }
+
   const handleSave = async (id: string, patch: Partial<TraceabilityLabel>): Promise<boolean> => {
     // Coerce empty strings to null for nullable DB columns, especially date fields
     const cleaned: Record<string, unknown> = {}
@@ -352,7 +408,7 @@ function HistoryTab() {
           </div>
         ) : (
           paginated.map((r) => (
-            <HistoryRow key={r.id} record={r} onSave={handleSave} />
+            <HistoryRow key={r.id} record={r} onSave={handleSave} onDelete={handleDelete} />
           ))
         )}
       </div>
