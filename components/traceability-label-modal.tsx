@@ -244,13 +244,18 @@ function HistoryTab() {
   useEffect(() => { setPage(1) }, [search])
 
   const handleSave = async (id: string, patch: Partial<TraceabilityLabel>) => {
-    await supabase
+    console.log("[v0] handleSave called — id:", id, "patch:", patch)
+    const { data, error } = await supabase
       .from(TABLES.TRACEABILITY_LABELS)
       .update({ ...patch, updated_at: new Date().toISOString() })
       .eq("id", id)
-    setRecords((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
-    )
+      .select()
+    console.log("[v0] update result — data:", data, "error:", error)
+    if (!error) {
+      setRecords((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
+      )
+    }
   }
 
   const filtered = records.filter((r) => {
@@ -337,7 +342,7 @@ function HistoryTab() {
               onClick={() => setPage((p) => p - 1)}
               className="px-2.5 py-1 rounded-lg text-xs border border-border bg-muted/30 hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              ‹ Önceki
+              �� Önceki
             </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1)
               .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
