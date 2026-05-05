@@ -244,17 +244,24 @@ function HistoryTab() {
   useEffect(() => { setPage(1) }, [search])
 
   const handleSave = async (id: string, patch: Partial<TraceabilityLabel>) => {
-    console.log("[v0] handleSave called — id:", id, "patch:", patch)
-    const { data, error } = await supabase
+    // Coerce empty strings to null for nullable DB columns, especially date fields
+    const cleaned: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(patch)) {
+      cleaned[k] = (typeof v === "string" && v.trim() === "") ? null : v
+    }
+    cleaned.updated_at = new Date().toISOString()
+
+    const { error } = await supabase
       .from(TABLES.TRACEABILITY_LABELS)
-      .update({ ...patch, updated_at: new Date().toISOString() })
+      .update(cleaned)
       .eq("id", id)
-      .select()
-    console.log("[v0] update result — data:", data, "error:", error)
+
     if (!error) {
       setRecords((prev) =>
         prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
       )
+    } else {
+      console.error("[v0] Supabase update error:", error.message, error.details)
     }
   }
 
