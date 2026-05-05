@@ -17,7 +17,26 @@ export const TABLES = {
   WAREHOUSE_LAYOUTS: "Depo_Ruzgar_Warehouse_Layouts",
   AUTH_PASSWORDS: "Depo_Ruzgar_Auth_Passwords",
   WAREHOUSES: "Depo_Ruzgar_Warehouses",
+  TRACEABILITY_LABELS: "Ruzgar_Traceability_Labels",
 } as const
+
+export interface TraceabilityLabel {
+  id: string
+  trace_no: string
+  printed_at: string
+  copies: number
+  fields: Record<string, string>      // { urun_adi, olcu, malzeme, kg, adet, tarih, ... }
+  hammadde: string | null
+  hammadde_lot: string | null
+  hammadde_tedarikci: string | null
+  alici: string | null
+  alici_siparis_no: string | null
+  sevkiyat_tarihi: string | null
+  notlar: string | null
+  created_by: string | null
+  updated_at: string
+  created_at: string
+}
 
 // Database types for Depo_Ruzgar tables
 export interface DepoRuzgarProduct {
