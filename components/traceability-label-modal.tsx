@@ -548,8 +548,8 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
 
     const labelHtml = `
 <div style="width:${S}px;height:${S}px;padding:8px 12px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;background:#ffffff;display:flex;flex-direction:column;overflow:hidden;">
-  <div style="border:2px solid #000;padding:4px;display:flex;align-items:center;justify-content:center;height:72px;flex-shrink:0;margin-bottom:6px;overflow:hidden;">
-    <img src="${logoUrl}" style="width:100%;height:64px;object-fit:contain;display:block;" />
+  <div style="border:2px solid #000;padding:4px;display:flex;align-items:center;justify-content:center;height:88px;flex-shrink:0;margin-bottom:6px;overflow:hidden;">
+    <img src="${logoUrl}" style="width:100%;height:80px;object-fit:contain;display:block;" />
   </div>
   <div style="border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:4px;flex-shrink:0;">
     <div style="font-size:8px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">URUN / PRODUCT</div>
@@ -748,7 +748,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                     className="overflow-hidden text-black flex flex-col"
                     style={{ width: 220, height: 220, background: "#fff", border: "2px solid #000", padding: "4px 5px", flexShrink: 0 }}
                   >
-                    <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: 44, marginBottom: 4, flexShrink: 0, padding: 2, overflow: "hidden" }}>
+                    <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: 55, marginBottom: 4, flexShrink: 0, padding: 2, overflow: "hidden" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                     </div>
