@@ -104,9 +104,9 @@ function HistoryRow({
         <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${open ? "rotate-90" : ""}`} />
       </button>
 
-      {/* Expanded form — scrollable so it never overflows the modal */}
+      {/* Expanded form */}
       {open && (
-        <div className="border-t border-border px-4 py-4 bg-muted/5 space-y-4 max-h-[55vh] overflow-y-auto">
+        <div className="border-t border-border px-4 py-4 bg-muted/5 space-y-4">
           {/* Hammadde */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
@@ -270,7 +270,7 @@ function HistoryTab() {
   const completeCount = records.filter((r) => r.hammadde && r.alici).length
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col min-h-0 flex-1">
       {/* Stats bar */}
       <div className="flex items-center gap-4 px-5 py-3 border-b border-border bg-muted/10 shrink-0">
         <div className="text-center">
@@ -310,8 +310,8 @@ function HistoryTab() {
         </div>
       </div>
 
-      {/* List — scrollable, accordion items themselves scroll internally */}
-      <div className="flex-1 overflow-y-auto px-5 pb-2 space-y-2">
+      {/* List — scrollable container; accordion expands inline, whole list scrolls */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-2 space-y-2">
         {loading ? (
           <div className="text-center py-12 text-sm text-muted-foreground">Yükleniyor...</div>
         ) : filtered.length === 0 ? (
@@ -543,11 +543,11 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col">
 
           {/* ── Label tab ── */}
           {activeTab === "label" && (
-            <div className="flex h-full overflow-hidden">
+            <div className="flex flex-1 min-h-0">
 
               {/* LEFT FORM */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
