@@ -104,9 +104,9 @@ function HistoryRow({
         <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${open ? "rotate-90" : ""}`} />
       </button>
 
-      {/* Expanded form */}
+      {/* Expanded form — scrollable so it never overflows the modal */}
       {open && (
-        <div className="border-t border-border px-4 py-4 bg-muted/5 space-y-4">
+        <div className="border-t border-border px-4 py-4 bg-muted/5 space-y-4 max-h-[55vh] overflow-y-auto">
           {/* Hammadde */}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
@@ -218,11 +218,14 @@ function HistoryRow({
   )
 }
 
+const PAGE_SIZE = 8
+
 // ─── History Tab ──────────────────────────────────────────────────────────────
 function HistoryTab() {
   const [records, setRecords] = useState<TraceabilityLabel[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState("")
+  const [page, setPage]       = useState(1)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -230,12 +233,15 @@ function HistoryTab() {
       .from(TABLES.TRACEABILITY_LABELS)
       .select("*")
       .order("printed_at", { ascending: false })
-      .limit(100)
+      .limit(500)
     setRecords((data as TraceabilityLabel[]) ?? [])
     setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Reset to page 1 when search changes
+  useEffect(() => { setPage(1) }, [search])
 
   const handleSave = async (id: string, patch: Partial<TraceabilityLabel>) => {
     await supabase
@@ -259,6 +265,8 @@ function HistoryTab() {
     )
   })
 
+  const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated    = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const completeCount = records.filter((r) => r.hammadde && r.alici).length
 
   return (
@@ -302,8 +310,8 @@ function HistoryTab() {
         </div>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-2">
+      {/* List — scrollable, accordion items themselves scroll internally */}
+      <div className="flex-1 overflow-y-auto px-5 pb-2 space-y-2">
         {loading ? (
           <div className="text-center py-12 text-sm text-muted-foreground">Yükleniyor...</div>
         ) : filtered.length === 0 ? (
@@ -311,11 +319,60 @@ function HistoryTab() {
             {search ? "Arama sonucu bulunamadı." : "Henüz basılmış etiket yok."}
           </div>
         ) : (
-          filtered.map((r) => (
+          paginated.map((r) => (
             <HistoryRow key={r.id} record={r} onSave={handleSave} />
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {!loading && filtered.length > PAGE_SIZE && (
+        <div className="shrink-0 flex items-center justify-between px-5 py-2 border-t border-border bg-muted/10">
+          <span className="text-[10px] text-muted-foreground">
+            {filtered.length} kayıt — sayfa {page} / {totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="px-2.5 py-1 rounded-lg text-xs border border-border bg-muted/30 hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              ‹ Önceki
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+              .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...")
+                acc.push(p)
+                return acc
+              }, [])
+              .map((item, idx) =>
+                item === "..." ? (
+                  <span key={`dots-${idx}`} className="px-1 text-xs text-muted-foreground">…</span>
+                ) : (
+                  <button
+                    key={item}
+                    onClick={() => setPage(item as number)}
+                    className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${
+                      page === item
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-muted/30 hover:bg-muted text-foreground"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-2.5 py-1 rounded-lg text-xs border border-border bg-muted/30 hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              Sonraki ›
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
