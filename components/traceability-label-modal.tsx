@@ -51,10 +51,11 @@ function HistoryRow({
   onSave,
 }: {
   record: TraceabilityLabel
-  onSave: (id: string, patch: Partial<TraceabilityLabel>) => Promise<void>
+  onSave: (id: string, patch: Partial<TraceabilityLabel>) => Promise<boolean>
 }) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "success" | "error">("idle")
   const [form, setForm] = useState({
     hammadde:           record.hammadde           ?? "",
     hammadde_lot:       record.hammadde_lot       ?? "",
@@ -69,8 +70,11 @@ function HistoryRow({
 
   const handleSave = async () => {
     setSaving(true)
-    await onSave(record.id, form)
+    setSaveStatus("idle")
+    const ok = await onSave(record.id, form)
     setSaving(false)
+    setSaveStatus(ok ? "success" : "error")
+    if (ok) setTimeout(() => setSaveStatus("idle"), 3000)
   }
 
   const urunAdi = (record.fields as any)?.urun || "—"
@@ -206,7 +210,22 @@ function HistoryRow({
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            {/* Server response indicator */}
+            <div className="text-xs font-medium transition-all">
+              {saveStatus === "success" && (
+                <span className="flex items-center gap-1.5 text-emerald-500">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Supabase&apos;e kaydedildi
+                </span>
+              )}
+              {saveStatus === "error" && (
+                <span className="flex items-center gap-1.5 text-red-500">
+                  <AlertCircle className="h-4 w-4" />
+                  Kaydetme başarısız
+                </span>
+              )}
+            </div>
             <Button size="sm" onClick={handleSave} disabled={saving} className="flex items-center gap-2">
               <Save className="h-3.5 w-3.5" />
               {saving ? "Kaydediliyor..." : "Kaydet"}
@@ -243,7 +262,7 @@ function HistoryTab() {
   // Reset to page 1 when search changes
   useEffect(() => { setPage(1) }, [search])
 
-  const handleSave = async (id: string, patch: Partial<TraceabilityLabel>) => {
+  const handleSave = async (id: string, patch: Partial<TraceabilityLabel>): Promise<boolean> => {
     // Coerce empty strings to null for nullable DB columns, especially date fields
     const cleaned: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(patch)) {
@@ -260,8 +279,9 @@ function HistoryTab() {
       setRecords((prev) =>
         prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
       )
+      return true
     } else {
-      console.error("[v0] Supabase update error:", error.message, error.details)
+      return false
     }
   }
 
