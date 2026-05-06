@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useTheme } from "@/lib/theme-context"
 import { Button } from "@/components/ui/button"
-import { LogOut, Moon, Sun, Loader2, History, Database, User, LayoutDashboard, Map, Plus, Tag } from "lucide-react"
+import { LogOut, Moon, Sun, Loader2, History, Database, User, LayoutDashboard, Map, Plus, Tag, ScanBarcode } from "lucide-react"
 import WarehouseMap from "@/components/warehouse-map"
 import ProductForm from "@/components/product-form"
 import { WarehouseSelector } from "@/components/warehouse-selector"
 import LabelGeneratorModal from "@/components/label-generator-modal"
+import TraceabilityLabelModal from "@/components/traceability-label-modal"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -22,6 +23,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("harita")
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [showLabelModal, setShowLabelModal] = useState(false)
+  const [showTraceModal, setShowTraceModal] = useState(false)
 
   const handleLogout = async () => {
     if (!username) return
@@ -87,6 +89,13 @@ export default function Dashboard() {
               >
                 <Tag className="h-4 w-4" />
                 Etiket Oluştur
+              </Button>
+              <Button
+                onClick={() => setShowTraceModal(true)}
+                className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white transition-colors duration-200 shadow-md"
+              >
+                <ScanBarcode className="h-4 w-4" />
+                Traceability
               </Button>
               <Button
                 variant="ghost"
@@ -178,6 +187,7 @@ export default function Dashboard() {
       </main>
 
       {showLabelModal && <LabelGeneratorModal onClose={() => setShowLabelModal(false)} />}
+      {showTraceModal && <TraceabilityLabelModal onClose={() => setShowTraceModal(false)} />}
     </div>
   )
 }
