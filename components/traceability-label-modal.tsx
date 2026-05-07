@@ -50,9 +50,9 @@ const DEFAULT_FIELDS: LabelField[] = [
 
 // Font size maps for print (px) and preview (px) per size key
 const FIELD_FONT: Record<FieldSize, { label100: number; value100: number; label75: number; value75: number; previewLabel: number; previewValue: number }> = {
-  s: { label100: 9,  value100: 11, label75: 8,  value75: 10, previewLabel: 3,   previewValue: 4   },
-  m: { label100: 9,  value100: 13, label75: 8,  value75: 11, previewLabel: 3.5, previewValue: 5.5 },
-  l: { label100: 9,  value100: 17, label75: 8,  value75: 14, previewLabel: 3.5, previewValue: 7.5 },
+  s: { label100: 8,  value100: 10, label75: 7,  value75: 9,  previewLabel: 3,   previewValue: 4   },
+  m: { label100: 9,  value100: 13, label75: 8,  value75: 11, previewLabel: 3.5, previewValue: 6   },
+  l: { label100: 9,  value100: 18, label75: 8,  value75: 15, previewLabel: 3.5, previewValue: 9   },
 }
 
 // ─── History Row ──────────────────────────────────────────────────────────────
@@ -826,7 +826,14 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                     Alanlar
                   </label>
                   <div className="space-y-2">
-                    {enabledFields.map((field) => (
+                    {enabledFields.map((field) => {
+                      const sz = field.size ?? "m"
+                      const inputClass = sz === "s"
+                        ? "text-xs py-1.5"
+                        : sz === "l"
+                        ? "text-base py-3 font-semibold"
+                        : "text-sm py-2"
+                      return (
                       <div key={field.id} className="flex gap-2 items-center group">
                         <label className="w-20 shrink-0 text-xs text-muted-foreground leading-tight">
                           {field.label}
@@ -839,22 +846,22 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                           value={field.value}
                           onChange={(e) => updateField(field.id, e.target.value)}
                           placeholder={`${field.label}...`}
-                          className="flex-1 text-xs px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
+                          className={`flex-1 px-3 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary transition-all ${inputClass}`}
                         />
                         {/* Size picker: S / M / L */}
                         <div className="flex items-center gap-0.5 bg-muted/30 rounded-md p-0.5 shrink-0">
-                          {(["s", "m", "l"] as FieldSize[]).map((sz) => (
+                          {(["s", "m", "l"] as FieldSize[]).map((s) => (
                             <button
-                              key={sz}
-                              onClick={() => resizeField(field.id, sz)}
+                              key={s}
+                              onClick={() => resizeField(field.id, s)}
                               className={`w-6 h-6 rounded text-[10px] font-bold transition-colors ${
-                                (field.size ?? "m") === sz
+                                sz === s
                                   ? "bg-primary text-primary-foreground shadow-sm"
                                   : "text-muted-foreground hover:text-foreground"
                               }`}
-                              title={sz === "s" ? "Küçük" : sz === "m" ? "Orta" : "Büyük"}
+                              title={s === "s" ? "Küçük" : s === "m" ? "Orta" : "Büyük"}
                             >
-                              {sz.toUpperCase()}
+                              {s.toUpperCase()}
                             </button>
                           ))}
                         </div>
@@ -866,7 +873,8 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
 
