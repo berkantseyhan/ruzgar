@@ -50,9 +50,9 @@ const DEFAULT_FIELDS: LabelField[] = [
 
 // Font size maps for print (px) and preview (px) per size key
 const FIELD_FONT: Record<FieldSize, { label100: number; value100: number; label75: number; value75: number; previewLabel: number; previewValue: number }> = {
-  s: { label100: 8,  value100: 10, label75: 7,  value75: 9,  previewLabel: 3,   previewValue: 4   },
-  m: { label100: 9,  value100: 13, label75: 8,  value75: 11, previewLabel: 3.5, previewValue: 6   },
-  l: { label100: 9,  value100: 18, label75: 8,  value75: 15, previewLabel: 3.5, previewValue: 9   },
+  s: { label100: 7,  value100: 9,  label75: 6,  value75: 8,  previewLabel: 3,   previewValue: 4   },
+  m: { label100: 8,  value100: 14, label75: 7,  value75: 12, previewLabel: 3.5, previewValue: 7   },
+  l: { label100: 9,  value100: 22, label75: 8,  value75: 18, previewLabel: 4,   previewValue: 12  },
 }
 
 // ─── History Row ──────────────────────────────────────────────────────────────
@@ -829,9 +829,9 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                     {enabledFields.map((field) => {
                       const sz = field.size ?? "m"
                       const inputClass = sz === "s"
-                        ? "text-xs py-1.5"
+                        ? "text-xs py-1"
                         : sz === "l"
-                        ? "text-base py-3 font-semibold"
+                        ? "text-2xl py-3 font-black"
                         : "text-sm py-2"
                       return (
                       <div key={field.id} className="flex gap-2 items-center group">
