@@ -19,11 +19,11 @@ interface TraceabilityLabelModalProps {
   onClose: () => void
 }
 
-function generateTraceNumber(): string {
-  const now = new Date()
-  const date = now.toISOString().slice(0, 10).replace(/-/g, "")
-  const rand = Math.floor(100000 + Math.random() * 900000).toString()
-  return `RC-${date}-${rand}`
+async function fetchTraceNumber(): Promise<string> {
+  const res = await fetch("/api/trace-number", { method: "POST" })
+  if (!res.ok) throw new Error("Trace numarası alınamadı")
+  const { traceNo } = await res.json()
+  return traceNo as string
 }
 
 function formatDate(iso: string) {
@@ -538,7 +538,8 @@ function DateGroup({
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelModalProps) {
   const [activeTab, setActiveTab]  = useState<"label" | "history">("label")
-  const [traceNo, setTraceNo]      = useState(generateTraceNumber())
+  const [traceNo, setTraceNo]      = useState("")
+  const [traceLoading, setTraceLoading] = useState(true)
   const [fields, setFields]        = useState<LabelField[]>(DEFAULT_FIELDS)
   const [copies, setCopies]        = useState(1)
   const [showFieldMenu, setShowFieldMenu] = useState(false)
@@ -546,6 +547,13 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   const [saving, setSaving]        = useState(false)
   const qrPreviewRef = useRef<HTMLCanvasElement>(null)
   const qrPrintRef   = useRef<HTMLCanvasElement>(null)
+
+  // Fetch first trace number from server on mount
+  useEffect(() => {
+    fetchTraceNumber()
+      .then((no) => setTraceNo(no))
+      .finally(() => setTraceLoading(false))
+  }, [])
 
   useEffect(() => {
     const previewCanvas = qrPreviewRef.current
@@ -568,7 +576,15 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     }
   }, [traceNo])
 
-  const regenerate = () => setTraceNo(generateTraceNumber())
+  const regenerate = async () => {
+    setTraceLoading(true)
+    try {
+      const no = await fetchTraceNumber()
+      setTraceNo(no)
+    } finally {
+      setTraceLoading(false)
+    }
+  }
   const updateField = (id: string, value: string) =>
     setFields((f) => f.map((field) => (field.id === id ? { ...field, value } : field)))
   const toggleField = (id: string) =>
@@ -717,14 +733,17 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                   </label>
                   <div className="flex gap-2 items-center">
                     <div className="flex-1 px-3 py-2 rounded-lg bg-muted/40 border border-border font-mono text-sm text-foreground select-all truncate">
-                      {traceNo}
+                      {traceLoading ? (
+                        <span className="text-muted-foreground animate-pulse">Numara alınıyor...</span>
+                      ) : traceNo}
                     </div>
                     <button
                       onClick={regenerate}
-                      className="p-2 rounded-lg bg-muted/40 border border-border hover:border-primary/50 hover:text-primary transition-colors"
-                      title="Yeni numara üret"
+                      disabled={traceLoading}
+                      className="p-2 rounded-lg bg-muted/40 border border-border hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="Yeni sıra numarası al"
                     >
-                      <RefreshCw className="h-4 w-4" />
+                      <RefreshCw className={`h-4 w-4 ${traceLoading ? "animate-spin" : ""}`} />
                     </button>
                   </div>
                 </div>
