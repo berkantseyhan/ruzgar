@@ -535,9 +535,41 @@ function DateGroup({
   )
 }
 
+// ─── Size configs (all in px at 96dpi; 1mm ≈ 3.7795px) ────────────────────────
+const SIZE_CONFIG = {
+  "100x100": {
+    label:        "100 × 100 mm",
+    pageSize:     "100mm 100mm",
+    printW:       378,
+    printH:       378,
+    previewW:     220,
+    previewH:     220,
+    logoBoxH:     88,
+    logoImgH:     80,
+    previewLogoH: 55,
+    qrPrint:      300,
+    qrPreview:    56,
+  },
+  "75x100": {
+    label:        "75 × 100 mm",
+    pageSize:     "75mm 100mm",
+    printW:       283,
+    printH:       378,
+    previewW:     165,
+    previewH:     220,
+    logoBoxH:     72,
+    logoImgH:     64,
+    previewLogoH: 44,
+    qrPrint:      240,
+    qrPreview:    48,
+  },
+} as const
+type LabelSize = keyof typeof SIZE_CONFIG
+
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelModalProps) {
   const [activeTab, setActiveTab]  = useState<"label" | "history">("label")
+  const [labelSize, setLabelSize]  = useState<LabelSize>("100x100")
   const [traceNo, setTraceNo]      = useState("")
   const [traceLoading, setTraceLoading] = useState(true)
   const [fields, setFields]        = useState<LabelField[]>(DEFAULT_FIELDS)
@@ -557,10 +589,11 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
 
   useEffect(() => {
     if (!traceNo) return   // wait until API returns a trace number
+    const cfg = SIZE_CONFIG[labelSize]
     const previewCanvas = qrPreviewRef.current
     if (previewCanvas) {
       QRCode.toCanvas(previewCanvas, traceNo, {
-        width: 56, margin: 1,
+        width: cfg.qrPreview, margin: 1,
         color: { dark: "#000000", light: "#ffffff" },
         errorCorrectionLevel: "M",
       })
@@ -568,14 +601,14 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     const printCanvas = qrPrintRef.current
     if (printCanvas) {
       QRCode.toCanvas(printCanvas, traceNo, {
-        width: 300, margin: 1,
+        width: cfg.qrPrint, margin: 1,
         color: { dark: "#000000", light: "#ffffff" },
         errorCorrectionLevel: "M",
       }, (err) => {
         if (!err) setQrDataUrl(printCanvas.toDataURL("image/png"))
       })
     }
-  }, [traceNo])
+  }, [traceNo, labelSize])
 
   const regenerate = async () => {
     setTraceLoading(true)
@@ -611,7 +644,10 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
 
     // Build print HTML
     const logoUrl = `${window.location.origin}/ruzgar-civata-logo.png`
-    const S = 378
+    const cfg = SIZE_CONFIG[labelSize]
+    const W = cfg.printW
+    const H = cfg.printH
+    const is75 = labelSize === "75x100"
 
     const bigField   = enabledFields.find((f) => f.big && f.value.trim())
     const restFields = enabledFields.filter((f) => !f.big && f.value.trim())
@@ -622,34 +658,38 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
       const isLast = i === mainFields.length - 1
       const isOdd  = mainFields.length % 2 !== 0
       const span   = isLast && isOdd ? "grid-column:1/3;" : ""
+      const labelFs = is75 ? "8px" : "9px"
+      const valueFs = is75 ? "11px" : "13px"
       return `<div style="${span}padding:3px 6px 3px 0;">
-        <div style="font-size:9px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px;">${f.label}</div>
-        <div style="font-size:13px;font-weight:900;color:#000;line-height:1.1;word-break:break-word;">${f.value}</div>
+        <div style="font-size:${labelFs};font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px;">${f.label}</div>
+        <div style="font-size:${valueFs};font-weight:900;color:#000;line-height:1.1;word-break:break-word;">${f.value}</div>
       </div>`
     }).join("")
 
     const fieldCount = mainFields.length
     const productFontSize = bigField
-      ? (fieldCount > 4 ? 18 : bigField.value.length > 20 ? 18 : bigField.value.length > 12 ? 22 : 26)
-      : 18
+      ? (fieldCount > 4 ? (is75 ? 14 : 18) : bigField.value.length > 20 ? (is75 ? 14 : 18) : bigField.value.length > 12 ? (is75 ? 17 : 22) : (is75 ? 20 : 26))
+      : (is75 ? 14 : 18)
+
+    const qrSize = is75 ? 56 : 68
 
     const labelHtml = `
-<div style="width:${S}px;height:${S}px;padding:8px 12px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;background:#ffffff;display:flex;flex-direction:column;overflow:hidden;">
-  <div style="border:2px solid #000;padding:4px;display:flex;align-items:center;justify-content:center;height:88px;flex-shrink:0;margin-bottom:6px;overflow:hidden;">
-    <img src="${logoUrl}" style="width:100%;height:80px;object-fit:contain;display:block;" />
+<div style="width:${W}px;height:${H}px;padding:8px 12px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;background:#ffffff;display:flex;flex-direction:column;overflow:hidden;">
+  <div style="border:2px solid #000;padding:4px;display:flex;align-items:center;justify-content:center;height:${cfg.logoBoxH}px;flex-shrink:0;margin-bottom:6px;overflow:hidden;">
+    <img src="${logoUrl}" style="width:100%;height:${cfg.logoImgH}px;object-fit:contain;display:block;" />
   </div>
   <div style="border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:4px;flex-shrink:0;">
-    <div style="font-size:8px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">URUN / PRODUCT</div>
+    <div style="font-size:${is75 ? "7px" : "8px"};font-weight:700;color:#000;text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">URUN / PRODUCT</div>
     <div style="font-size:${productFontSize}px;font-weight:900;color:#000;line-height:1.1;word-break:break-word;">${bigField ? bigField.value : "—"}</div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;column-gap:8px;flex-shrink:0;margin-bottom:4px;">${gridCells}</div>
   <div style="flex:1;min-height:4px;"></div>
   <div style="display:flex;align-items:center;gap:10px;border-top:2px solid #000;padding-top:6px;flex-shrink:0;">
-    <img src="${qrDataUrl}" style="width:68px;height:68px;flex-shrink:0;display:block;" />
+    <img src="${qrDataUrl}" style="width:${qrSize}px;height:${qrSize}px;flex-shrink:0;display:block;" />
     <div style="flex:1;overflow:hidden;">
-      <div style="font-size:8px;font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">TRACEABILITY NO</div>
-      <div style="font-size:10px;font-family:'Courier New',Courier,monospace;font-weight:700;color:#000;word-break:break-all;line-height:1.3;">${traceNo}</div>
-      ${dateField ? `<div style="font-size:12px;font-weight:700;color:#000;margin-top:3px;">Tarih: ${dateField.value}</div>` : ""}
+      <div style="font-size:${is75 ? "7px" : "8px"};font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">TRACEABILITY NO</div>
+      <div style="font-size:${is75 ? "8px" : "10px"};font-family:'Courier New',Courier,monospace;font-weight:700;color:#000;word-break:break-all;line-height:1.3;">${traceNo}</div>
+      ${dateField ? `<div style="font-size:${is75 ? "10px" : "12px"};font-weight:700;color:#000;margin-top:3px;">Tarih: ${dateField.value}</div>` : ""}
     </div>
   </div>
 </div>`
@@ -661,8 +701,8 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
 <html lang="tr"><head><meta charset="UTF-8"/><title>Traceability — ${traceNo}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
-  @page{size:100mm 100mm;margin:0;}
-  html,body{width:${S}px;margin:0;padding:0;background:#fff;}
+  @page{size:${cfg.pageSize};margin:0;}
+  html,body{width:${W}px;margin:0;padding:0;background:#fff;}
   @media print{*{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}}
 </style></head><body>
   ${labelsHtml}
@@ -684,8 +724,26 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div>
             <h2 className="text-base font-bold text-foreground">Traceability Etiket</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">100 × 100 mm — QR kodlu</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{SIZE_CONFIG[labelSize].label} — QR kodlu</p>
           </div>
+          {/* Size selector — only visible on label tab */}
+          {activeTab === "label" && (
+            <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-1 mr-2">
+              {(Object.keys(SIZE_CONFIG) as LabelSize[]).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => setLabelSize(key)}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    labelSize === key
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {SIZE_CONFIG[key].label}
+                </button>
+              ))}
+            </div>
+          )}
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
             <X className="h-4 w-4" />
           </button>
@@ -833,49 +891,55 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
               <div className="w-64 shrink-0 border-l border-border bg-muted/10 px-4 py-4 flex flex-col items-center gap-3">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Önizleme</p>
 
-                <div className="flex justify-center">
-                  <div
-                    className="overflow-hidden text-black flex flex-col"
-                    style={{ width: 220, height: 220, background: "#fff", border: "2px solid #000", padding: "4px 5px", flexShrink: 0 }}
-                  >
-                    <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: 55, marginBottom: 4, flexShrink: 0, padding: 2, overflow: "hidden" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                    </div>
-                    <div style={{ borderBottom: "1px solid #000", paddingBottom: 2, marginBottom: 2, flexShrink: 0 }}>
-                      <div style={{ fontSize: 4, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 1 }}>URUN / PRODUCT</div>
-                      <div style={{ fontSize: 9, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>
-                        {enabledFields.find((f) => f.big)?.value || "—"}
-                      </div>
-                    </div>
-                    {(() => {
-                      const infoFields = enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim())
-                      return (
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 4, flexShrink: 0, marginBottom: 2 }}>
-                          {infoFields.map((f, i) => (
-                            <div key={f.id} style={{ gridColumn: (i === infoFields.length - 1 && infoFields.length % 2 !== 0) ? "1/3" : undefined, padding: "1px 2px 1px 0" }}>
-                              <div style={{ fontSize: 3.5, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.3px" }}>{f.label}</div>
-                              <div style={{ fontSize: 5.5, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>{f.value}</div>
-                            </div>
-                          ))}
+                {(() => {
+                  const pcfg = SIZE_CONFIG[labelSize]
+                  const pIs75 = labelSize === "75x100"
+                  return (
+                    <div className="flex justify-center">
+                      <div
+                        className="overflow-hidden text-black flex flex-col transition-all"
+                        style={{ width: pcfg.previewW, height: pcfg.previewH, background: "#fff", border: "2px solid #000", padding: "4px 5px", flexShrink: 0 }}
+                      >
+                        <div style={{ border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center", height: pcfg.previewLogoH, marginBottom: 4, flexShrink: 0, padding: 2, overflow: "hidden" }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/ruzgar-civata-logo.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                         </div>
-                      )
-                    })()}
-                    <div style={{ flex: 1, minHeight: 2 }} />
-                    <div style={{ borderTop: "1px solid #000", paddingTop: 3, display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                      <canvas ref={qrPreviewRef} style={{ width: 56, height: 56, flexShrink: 0 }} />
-                      <div style={{ flex: 1, overflow: "hidden" }}>
-                        <div style={{ fontSize: 3.5, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, marginBottom: 1 }}>TRACEABILITY NO</div>
-                        <div style={{ fontSize: 4, fontFamily: "monospace", fontWeight: 700, color: "#000", wordBreak: "break-all" as const, lineHeight: 1.3 }}>{traceNo}</div>
-                        {enabledFields.find((f) => f.id === "tarih" && f.value) && (
-                          <div style={{ fontSize: 4, fontWeight: 700, color: "#000", marginTop: 1 }}>
-                            Tarih: {enabledFields.find((f) => f.id === "tarih")?.value}
+                        <div style={{ borderBottom: "1px solid #000", paddingBottom: 2, marginBottom: 2, flexShrink: 0 }}>
+                          <div style={{ fontSize: pIs75 ? 3 : 4, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 1 }}>URUN / PRODUCT</div>
+                          <div style={{ fontSize: pIs75 ? 7 : 9, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>
+                            {enabledFields.find((f) => f.big)?.value || "—"}
                           </div>
-                        )}
+                        </div>
+                        {(() => {
+                          const infoFields = enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim())
+                          return (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 3, flexShrink: 0, marginBottom: 2 }}>
+                              {infoFields.map((f, i) => (
+                                <div key={f.id} style={{ gridColumn: (i === infoFields.length - 1 && infoFields.length % 2 !== 0) ? "1/3" : undefined, padding: "1px 2px 1px 0" }}>
+                                  <div style={{ fontSize: pIs75 ? 2.5 : 3.5, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.3px" }}>{f.label}</div>
+                                  <div style={{ fontSize: pIs75 ? 4.5 : 5.5, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>{f.value}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })()}
+                        <div style={{ flex: 1, minHeight: 2 }} />
+                        <div style={{ borderTop: "1px solid #000", paddingTop: 3, display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                          <canvas ref={qrPreviewRef} style={{ width: pcfg.qrPreview, height: pcfg.qrPreview, flexShrink: 0 }} />
+                          <div style={{ flex: 1, overflow: "hidden" }}>
+                            <div style={{ fontSize: pIs75 ? 2.8 : 3.5, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, marginBottom: 1 }}>TRACEABILITY NO</div>
+                            <div style={{ fontSize: pIs75 ? 3 : 4, fontFamily: "monospace", fontWeight: 700, color: "#000", wordBreak: "break-all" as const, lineHeight: 1.3 }}>{traceNo}</div>
+                            {enabledFields.find((f) => f.id === "tarih" && f.value) && (
+                              <div style={{ fontSize: pIs75 ? 3 : 4, fontWeight: 700, color: "#000", marginTop: 1 }}>
+                                Tarih: {enabledFields.find((f) => f.id === "tarih")?.value}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  )
+                })()}
 
                 <p className="text-[9px] text-muted-foreground text-center leading-relaxed">
                   Zebra GC420t termal optimize
