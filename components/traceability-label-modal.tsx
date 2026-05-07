@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { X, Plus, Trash2, Printer, RefreshCw, ChevronDown, ChevronUp, History, Tag, ChevronRight, Search, AlertCircle, CheckCircle2, Save } from "lucide-react"
+import { X, Plus, Trash2, Printer, RefreshCw, ChevronDown, ChevronUp, History, Tag, ChevronRight, Search, AlertCircle, CheckCircle2, Save, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import QRCode from "qrcode"
 import { supabase, TABLES } from "@/lib/supabase"
@@ -353,8 +353,22 @@ function HistoryTab() {
     )
   })
 
-  const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated    = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // Group filtered records by date (YYYY-MM-DD), sorted newest first
+  const grouped: { dateKey: string; label: string; items: TraceabilityLabel[] }[] = []
+  for (const r of filtered) {
+    const dateKey = r.printed_at.slice(0, 10) // "2026-05-03"
+    const [y, m, d] = dateKey.split("-")
+    const label = `${d}.${m}.${y}`
+    const existing = grouped.find((g) => g.dateKey === dateKey)
+    if (existing) existing.items.push(r)
+    else grouped.push({ dateKey, label, items: [r] })
+  }
+  // Sort groups newest first
+  grouped.sort((a, b) => b.dateKey.localeCompare(a.dateKey))
+
+  // Pagination operates on date groups
+  const totalPages  = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE))
+  const paginatedGroups = grouped.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const completeCount = records.filter((r) => r.hammadde && r.alici).length
 
   return (
@@ -398,26 +412,32 @@ function HistoryTab() {
         </div>
       </div>
 
-      {/* List — scrollable container; accordion expands inline, whole list scrolls */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-2 space-y-2">
+      {/* Date-grouped list */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-2 space-y-3">
         {loading ? (
           <div className="text-center py-12 text-sm text-muted-foreground">Yükleniyor...</div>
-        ) : filtered.length === 0 ? (
+        ) : grouped.length === 0 ? (
           <div className="text-center py-12 text-sm text-muted-foreground">
             {search ? "Arama sonucu bulunamadı." : "Henüz basılmış etiket yok."}
           </div>
         ) : (
-          paginated.map((r) => (
-            <HistoryRow key={r.id} record={r} onSave={handleSave} onDelete={handleDelete} />
+          paginatedGroups.map((group) => (
+            <DateGroup
+              key={group.dateKey}
+              dateLabel={group.label}
+              items={group.items}
+              onSave={handleSave}
+              onDelete={handleDelete}
+            />
           ))
         )}
       </div>
 
-      {/* Pagination */}
-      {!loading && filtered.length > PAGE_SIZE && (
+      {/* Pagination — over date groups */}
+      {!loading && grouped.length > PAGE_SIZE && (
         <div className="shrink-0 flex items-center justify-between px-5 py-2 border-t border-border bg-muted/10">
           <span className="text-[10px] text-muted-foreground">
-            {filtered.length} kayıt — sayfa {page} / {totalPages}
+            {grouped.length} gün — sayfa {page} / {totalPages}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -425,7 +445,7 @@ function HistoryTab() {
               onClick={() => setPage((p) => p - 1)}
               className="px-2.5 py-1 rounded-lg text-xs border border-border bg-muted/30 hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              �� Önceki
+              &lsaquo; Önceki
             </button>
             {Array.from({ length: totalPages }, (_, i) => i + 1)
               .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
@@ -456,9 +476,59 @@ function HistoryTab() {
               onClick={() => setPage((p) => p + 1)}
               className="px-2.5 py-1 rounded-lg text-xs border border-border bg-muted/30 hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
-              Sonraki ›
+              Sonraki &rsaquo;
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Date Group ───────────────────────────────────────────────────────────────
+function DateGroup({
+  dateLabel,
+  items,
+  onSave,
+  onDelete,
+}: {
+  dateLabel: string
+  items: TraceabilityLabel[]
+  onSave: (id: string, patch: Partial<TraceabilityLabel>) => Promise<boolean>
+  onDelete: (id: string) => Promise<boolean>
+}) {
+  const [open, setOpen] = useState(true)
+  const completeInGroup = items.filter((r) => r.hammadde && r.alici).length
+
+  return (
+    <div className="rounded-xl border border-border overflow-hidden">
+      {/* Date header — click to collapse */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/20 hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+          <span className="text-sm font-semibold text-foreground">{dateLabel}</span>
+          <span className="text-[10px] text-muted-foreground">{items.length} etiket</span>
+          {completeInGroup < items.length && (
+            <span className="text-[10px] font-medium text-amber-500">
+              {items.length - completeInGroup} eksik
+            </span>
+          )}
+          {completeInGroup === items.length && (
+            <span className="text-[10px] font-medium text-emerald-500">Tümü tam</span>
+          )}
+        </div>
+        <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+
+      {/* Records for this date */}
+      {open && (
+        <div className="divide-y divide-border/50">
+          {items.map((r) => (
+            <HistoryRow key={r.id} record={r} onSave={onSave} onDelete={onDelete} />
+          ))}
         </div>
       )}
     </div>
