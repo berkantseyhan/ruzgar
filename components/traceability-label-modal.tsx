@@ -947,10 +947,15 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                         </div>
                         <div style={{ borderBottom: "1px solid #000", paddingBottom: 2, marginBottom: 2, flexShrink: 0 }}>
                           <div style={{ fontSize: pIs75 ? 3 : 4, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.5px", marginBottom: 1 }}>URUN / PRODUCT</div>
-                          <div style={{ fontSize: pIs75 ? 7 : 9, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>
-                            {enabledFields.find((f) => f.big)?.value || "—"}
-                          </div>
-                        </div>
+                          {(() => {
+                            const bigField = enabledFields.find((f) => f.big)
+                            const bigFsz = bigField ? FIELD_FONT[bigField.size ?? "m"] : FIELD_FONT["m"]
+                            return (
+                              <div style={{ fontSize: pIs75 ? bigFsz.previewLabel * 1.1 : bigFsz.previewValue * 0.8, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const, direction: "ltr" }}>
+                                {bigField?.value || "—"}
+                              </div>
+                            )
+                          })()}
                         {(() => {
                           const infoFields = enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim())
                           return (
