@@ -7,12 +7,15 @@ import QRCode from "qrcode"
 import { supabase, TABLES } from "@/lib/supabase"
 import type { TraceabilityLabel } from "@/lib/supabase"
 
+type FieldSize = "s" | "m" | "l"
+
 interface LabelField {
   id: string
   label: string
   value: string
   enabled: boolean
   big?: boolean
+  size?: FieldSize
 }
 
 interface TraceabilityLabelModalProps {
@@ -34,16 +37,23 @@ function formatDate(iso: string) {
 }
 
 const DEFAULT_FIELDS: LabelField[] = [
-  { id: "urun",     label: "Ürün Adı",   value: "", enabled: true,  big: true  },
-  { id: "olcu",     label: "Ölçü",       value: "", enabled: true,  big: false },
-  { id: "malzeme",  label: "Malzeme",    value: "", enabled: true,  big: false },
-  { id: "kg",       label: "KG",         value: "", enabled: true,  big: false },
-  { id: "adet",     label: "Adet",       value: "", enabled: true,  big: false },
-  { id: "siparis",  label: "Sipariş No", value: "", enabled: false, big: false },
-  { id: "lot",      label: "Lot",        value: "", enabled: false, big: false },
-  { id: "tarih",    label: "Tarih",      value: new Date().toLocaleDateString("tr-TR"), enabled: true, big: false },
-  { id: "not",      label: "Not",        value: "", enabled: false, big: false },
+  { id: "urun",     label: "Ürün Adı",   value: "", enabled: true,  big: true,  size: "m" },
+  { id: "olcu",     label: "Ölçü",       value: "", enabled: true,  big: false, size: "m" },
+  { id: "malzeme",  label: "Malzeme",    value: "", enabled: true,  big: false, size: "m" },
+  { id: "kg",       label: "KG",         value: "", enabled: true,  big: false, size: "m" },
+  { id: "adet",     label: "Adet",       value: "", enabled: true,  big: false, size: "m" },
+  { id: "siparis",  label: "Sipariş No", value: "", enabled: false, big: false, size: "m" },
+  { id: "lot",      label: "Lot",        value: "", enabled: false, big: false, size: "m" },
+  { id: "tarih",    label: "Tarih",      value: new Date().toLocaleDateString("tr-TR"), enabled: true, big: false, size: "m" },
+  { id: "not",      label: "Not",        value: "", enabled: false, big: false, size: "m" },
 ]
+
+// Font size maps for print (px) and preview (px) per size key
+const FIELD_FONT: Record<FieldSize, { label100: number; value100: number; label75: number; value75: number; previewLabel: number; previewValue: number }> = {
+  s: { label100: 9,  value100: 11, label75: 8,  value75: 10, previewLabel: 3,   previewValue: 4   },
+  m: { label100: 9,  value100: 13, label75: 8,  value75: 11, previewLabel: 3.5, previewValue: 5.5 },
+  l: { label100: 9,  value100: 17, label75: 8,  value75: 14, previewLabel: 3.5, previewValue: 7.5 },
+}
 
 // ─── History Row ──────────────────────────────────────────────────────────────
 function HistoryRow({
@@ -621,6 +631,8 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   }
   const updateField = (id: string, value: string) =>
     setFields((f) => f.map((field) => (field.id === id ? { ...field, value } : field)))
+  const resizeField = (id: string, size: FieldSize) =>
+    setFields((f) => f.map((field) => (field.id === id ? { ...field, size } : field)))
   const toggleField = (id: string) =>
     setFields((f) => f.map((field) => (field.id === id ? { ...field, enabled: !field.enabled } : field)))
 
@@ -658,8 +670,9 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
       const isLast = i === mainFields.length - 1
       const isOdd  = mainFields.length % 2 !== 0
       const span   = isLast && isOdd ? "grid-column:1/3;" : ""
-      const labelFs = is75 ? "8px" : "9px"
-      const valueFs = is75 ? "11px" : "13px"
+      const fsz    = FIELD_FONT[f.size ?? "m"]
+      const labelFs = is75 ? `${fsz.label75}px` : `${fsz.label100}px`
+      const valueFs = is75 ? `${fsz.value75}px` : `${fsz.value100}px`
       return `<div style="${span}padding:3px 6px 3px 0;">
         <div style="font-size:${labelFs};font-weight:700;color:#000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px;">${f.label}</div>
         <div style="font-size:${valueFs};font-weight:900;color:#000;line-height:1.1;word-break:break-word;">${f.value}</div>
@@ -815,10 +828,10 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                   <div className="space-y-2">
                     {enabledFields.map((field) => (
                       <div key={field.id} className="flex gap-2 items-center group">
-                        <label className="w-24 shrink-0 text-xs text-muted-foreground leading-tight">
+                        <label className="w-20 shrink-0 text-xs text-muted-foreground leading-tight">
                           {field.label}
                           {field.big && (
-                            <span className="ml-1 text-[9px] bg-primary/15 text-primary px-1 rounded">Ana Başlık</span>
+                            <span className="ml-1 text-[9px] bg-primary/15 text-primary px-1 rounded">Ana</span>
                           )}
                         </label>
                         <input
@@ -828,6 +841,23 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                           placeholder={`${field.label}...`}
                           className="flex-1 text-xs px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
                         />
+                        {/* Size picker: S / M / L */}
+                        <div className="flex items-center gap-0.5 bg-muted/30 rounded-md p-0.5 shrink-0">
+                          {(["s", "m", "l"] as FieldSize[]).map((sz) => (
+                            <button
+                              key={sz}
+                              onClick={() => resizeField(field.id, sz)}
+                              className={`w-6 h-6 rounded text-[10px] font-bold transition-colors ${
+                                (field.size ?? "m") === sz
+                                  ? "bg-primary text-primary-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                              title={sz === "s" ? "Küçük" : sz === "m" ? "Orta" : "Büyük"}
+                            >
+                              {sz.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
                         <button
                           onClick={() => toggleField(field.id)}
                           className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-all"
@@ -914,12 +944,15 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                           const infoFields = enabledFields.filter((f) => !f.big && f.id !== "tarih" && f.value.trim())
                           return (
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 3, flexShrink: 0, marginBottom: 2 }}>
-                              {infoFields.map((f, i) => (
-                                <div key={f.id} style={{ gridColumn: (i === infoFields.length - 1 && infoFields.length % 2 !== 0) ? "1/3" : undefined, padding: "1px 2px 1px 0" }}>
-                                  <div style={{ fontSize: pIs75 ? 2.5 : 3.5, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.3px" }}>{f.label}</div>
-                                  <div style={{ fontSize: pIs75 ? 4.5 : 5.5, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>{f.value}</div>
-                                </div>
-                              ))}
+                              {infoFields.map((f, i) => {
+                                const fsz = FIELD_FONT[f.size ?? "m"]
+                                return (
+                                  <div key={f.id} style={{ gridColumn: (i === infoFields.length - 1 && infoFields.length % 2 !== 0) ? "1/3" : undefined, padding: "1px 2px 1px 0" }}>
+                                    <div style={{ fontSize: fsz.previewLabel, fontWeight: 700, color: "#000", textTransform: "uppercase" as const, letterSpacing: "0.3px" }}>{f.label}</div>
+                                    <div style={{ fontSize: fsz.previewValue, fontWeight: 900, color: "#000", lineHeight: 1.1, wordBreak: "break-word" as const }}>{f.value}</div>
+                                  </div>
+                                )
+                              })}
                             </div>
                           )
                         })()}
