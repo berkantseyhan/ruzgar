@@ -828,11 +828,6 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                   <div className="space-y-2">
                     {enabledFields.map((field) => {
                       const sz = field.size ?? "m"
-                      const inputClass = sz === "s"
-                        ? "text-xs py-1"
-                        : sz === "l"
-                        ? "text-2xl py-3 font-black"
-                        : "text-sm py-2"
                       return (
                       <div key={field.id} className="flex gap-2 items-center group">
                         <label className="w-20 shrink-0 text-xs text-muted-foreground leading-tight">
@@ -846,10 +841,10 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                           value={field.value}
                           onChange={(e) => updateField(field.id, e.target.value)}
                           placeholder={`${field.label}...`}
-                          className={`flex-1 px-3 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary transition-all ${inputClass}`}
+                          className="flex-1 text-sm px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                         />
-                        {/* Size picker: S / M / L */}
-                        <div className="flex items-center gap-0.5 bg-muted/30 rounded-md p-0.5 shrink-0">
+                        {/* Size picker — only affects printed label font size */}
+                        <div className="flex items-center gap-0.5 bg-muted/30 rounded-md p-0.5 shrink-0" title="Etiketteki yazı boyutu">
                           {(["s", "m", "l"] as FieldSize[]).map((s) => (
                             <button
                               key={s}
@@ -859,7 +854,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                                   ? "bg-primary text-primary-foreground shadow-sm"
                                   : "text-muted-foreground hover:text-foreground"
                               }`}
-                              title={s === "s" ? "Küçük" : s === "m" ? "Orta" : "Büyük"}
+                              title={s === "s" ? "Etikette küçük" : s === "m" ? "Etikette orta" : "Etikette büyük"}
                             >
                               {s.toUpperCase()}
                             </button>
