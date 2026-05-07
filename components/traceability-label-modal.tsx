@@ -727,6 +727,12 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   <\/script>
 </body></html>`)
     win.document.close()
+
+    // Auto-fetch a fresh trace number so next print gets a new unique record
+    setTraceLoading(true)
+    fetchTraceNumber()
+      .then((no) => setTraceNo(no))
+      .finally(() => setTraceLoading(false))
   }
 
   return (
@@ -912,7 +918,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                     >−</button>
                     <span className="w-10 text-center text-sm font-semibold">{copies}</span>
                     <button
-                      onClick={() => setCopies((c) => Math.min(20, c + 1))}
+                      onClick={() => setCopies((c) => Math.min(50, c + 1))}
                       className="w-8 h-8 rounded-lg border border-border bg-muted/40 hover:bg-muted flex items-center justify-center text-base font-bold transition-colors"
                     >+</button>
                     <span className="text-xs text-muted-foreground ml-1">adet</span>
