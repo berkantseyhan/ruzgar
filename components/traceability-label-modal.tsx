@@ -848,6 +848,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                           value={field.value}
                           onChange={(e) => updateField(field.id, e.target.value)}
                           placeholder={`${field.label}...`}
+                          dir="ltr"
                           className="flex-1 text-sm px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                         {/* Size picker — only affects printed label font size */}
@@ -1004,7 +1005,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
           {activeTab === "label" && (
             <Button onClick={handlePrint} disabled={saving} className="flex items-center gap-2 bg-primary">
               <Printer className="h-4 w-4" />
-              {saving ? "Kaydediliyor..." : copies > 1 ? `${copies} Etiket Yazdır` : "Yazd��r / PDF"}
+              {saving ? "Kaydediliyor..." : copies > 1 ? `${copies} Etiket Yazdır` : "Yazdır / PDF"}
             </Button>
           )}
         </div>
