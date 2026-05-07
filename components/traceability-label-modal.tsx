@@ -556,6 +556,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
   }, [])
 
   useEffect(() => {
+    if (!traceNo) return   // wait until API returns a trace number
     const previewCanvas = qrPreviewRef.current
     if (previewCanvas) {
       QRCode.toCanvas(previewCanvas, traceNo, {
