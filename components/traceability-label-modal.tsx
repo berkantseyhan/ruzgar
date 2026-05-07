@@ -37,15 +37,15 @@ function formatDate(iso: string) {
 }
 
 const DEFAULT_FIELDS: LabelField[] = [
-  { id: "urun",     label: "Ürün Adı",   value: "", enabled: true,  big: true,  size: "m" },
-  { id: "olcu",     label: "Ölçü",       value: "", enabled: true,  big: false, size: "m" },
-  { id: "malzeme",  label: "Malzeme",    value: "", enabled: true,  big: false, size: "m" },
-  { id: "kg",       label: "KG",         value: "", enabled: true,  big: false, size: "m" },
-  { id: "adet",     label: "Adet",       value: "", enabled: true,  big: false, size: "m" },
-  { id: "siparis",  label: "Sipariş No", value: "", enabled: false, big: false, size: "m" },
-  { id: "lot",      label: "Lot",        value: "", enabled: false, big: false, size: "m" },
-  { id: "tarih",    label: "Tarih",      value: new Date().toLocaleDateString("tr-TR"), enabled: true, big: false, size: "m" },
-  { id: "not",      label: "Not",        value: "", enabled: false, big: false, size: "m" },
+  { id: "urun",     label: "Ürün Adı",   value: "", enabled: true,  big: true,  size: "l" },
+  { id: "olcu",     label: "Ölçü",       value: "", enabled: true,  big: false, size: "l" },
+  { id: "malzeme",  label: "Malzeme",    value: "", enabled: true,  big: false, size: "l" },
+  { id: "kg",       label: "KG",         value: "", enabled: true,  big: false, size: "l" },
+  { id: "adet",     label: "Adet",       value: "", enabled: true,  big: false, size: "l" },
+  { id: "siparis",  label: "Sipariş No", value: "", enabled: false, big: false, size: "l" },
+  { id: "lot",      label: "Lot",        value: "", enabled: false, big: false, size: "l" },
+  { id: "tarih",    label: "Tarih",      value: new Date().toLocaleDateString("tr-TR"), enabled: true, big: false, size: "l" },
+  { id: "not",      label: "Not",        value: "", enabled: false, big: false, size: "l" },
 ]
 
 // Font size maps for print (px) and preview (px) per size key
@@ -680,9 +680,10 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     }).join("")
 
     const fieldCount = mainFields.length
+    const bigFieldSize = FIELD_FONT[bigField?.size ?? "m"]
     const productFontSize = bigField
-      ? (fieldCount > 4 ? (is75 ? 14 : 18) : bigField.value.length > 20 ? (is75 ? 14 : 18) : bigField.value.length > 12 ? (is75 ? 17 : 22) : (is75 ? 20 : 26))
-      : (is75 ? 14 : 18)
+      ? (is75 ? bigFieldSize.value75 : bigFieldSize.value100)
+      : (is75 ? 10 : 14)
 
     const qrSize = is75 ? 56 : 68
 
@@ -1003,7 +1004,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
           {activeTab === "label" && (
             <Button onClick={handlePrint} disabled={saving} className="flex items-center gap-2 bg-primary">
               <Printer className="h-4 w-4" />
-              {saving ? "Kaydediliyor..." : copies > 1 ? `${copies} Etiket Yazdır` : "Yazdır / PDF"}
+              {saving ? "Kaydediliyor..." : copies > 1 ? `${copies} Etiket Yazdır` : "Yazd��r / PDF"}
             </Button>
           )}
         </div>
