@@ -50,9 +50,9 @@ const DEFAULT_FIELDS: LabelField[] = [
 
 // Font size maps for print (px) and preview (px) per size key
 const FIELD_FONT: Record<FieldSize, { label100: number; value100: number; label75: number; value75: number; previewLabel: number; previewValue: number }> = {
-  s: { label100: 7,  value100: 9,  label75: 6,  value75: 8,  previewLabel: 3,   previewValue: 4   },
-  m: { label100: 8,  value100: 14, label75: 7,  value75: 12, previewLabel: 3.5, previewValue: 7   },
-  l: { label100: 9,  value100: 22, label75: 8,  value75: 18, previewLabel: 4,   previewValue: 12  },
+  s: { label100: 14, value100: 18, label75: 12, value75: 16, previewLabel: 3,   previewValue: 4   },
+  m: { label100: 16, value100: 28, label75: 14, value75: 24, previewLabel: 3.5, previewValue: 7   },
+  l: { label100: 18, value100: 44, label75: 16, value75: 36, previewLabel: 4,   previewValue: 12  },
 }
 
 // ─── History Row ──────────────────────────────────────────────────────────────
@@ -683,7 +683,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     const bigFieldSize = FIELD_FONT[bigField?.size ?? "m"]
     const productFontSize = bigField
       ? (is75 ? bigFieldSize.value75 : bigFieldSize.value100)
-      : (is75 ? 10 : 14)
+      : (is75 ? 20 : 28)
 
     const qrSize = is75 ? 56 : 68
 
@@ -837,10 +837,10 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                       const sz = field.size ?? "m"
                       return (
                       <div key={field.id} className="flex gap-2 items-center group">
-                        <label className="w-20 shrink-0 text-xs text-muted-foreground leading-tight">
+                        <label className="w-24 shrink-0 text-base font-semibold text-muted-foreground leading-tight">
                           {field.label}
                           {field.big && (
-                            <span className="ml-1 text-[9px] bg-primary/15 text-primary px-1 rounded">Ana</span>
+                            <span className="ml-1 text-[11px] bg-primary/15 text-primary px-1 rounded">Ana</span>
                           )}
                         </label>
                         <input
@@ -849,7 +849,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
                           onChange={(e) => updateField(field.id, e.target.value)}
                           placeholder={`${field.label}...`}
                           dir="ltr"
-                          className="flex-1 text-sm px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+                          className="flex-1 text-base px-4 py-3 rounded-lg bg-muted/40 border border-border text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                         {/* Size picker — only affects printed label font size */}
                         <div className="flex items-center gap-0.5 bg-muted/30 rounded-md p-0.5 shrink-0" title="Etiketteki yazı boyutu">
