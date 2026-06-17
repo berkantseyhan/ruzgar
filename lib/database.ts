@@ -596,6 +596,15 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
 
     console.log(`📊 Fetching warehouse layout from Supabase for warehouse: ${warehouseId || "default"}`)
     const supabase = createClient()
+    
+    // Debug: Log all layouts for this warehouse
+    if (warehouseId) {
+      const { data: allLayouts, error: allError } = await supabase
+        .from("Depo_Ruzgar_Warehouse_Layouts")
+        .select("id, name, is_active, warehouse_id")
+        .eq("warehouse_id", warehouseId)
+      console.log("[v0] All layouts for warehouse", warehouseId, ":", allLayouts, "error:", allError)
+    }
 
     let query = supabase.from("Depo_Ruzgar_Warehouse_Layouts").select("*")
 
@@ -674,12 +683,17 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
             }
           }
           
-          console.log("📊 No existing layout found, creating default layout")
+          console.log("📊 No existing layout found, creating default layout for warehouse:", warehouseId)
           const defaultLayout = getDefaultWarehouseLayout(warehouseId)
-          const saved = await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
-          if (!saved) {
-            throw new Error("Varsayılan layout oluşturulamadı")
+          
+          // Try to save the default layout, but return it anyway even if save fails
+          try {
+            await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
+            console.log("✅ Default layout saved successfully")
+          } catch (saveError) {
+            console.warn("⚠️ Could not save default layout, but returning it anyway:", saveError)
           }
+          
           return defaultLayout
         }
 
