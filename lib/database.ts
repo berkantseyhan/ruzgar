@@ -602,8 +602,10 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
     if (warehouseId) {
       query = query.eq("warehouse_id", warehouseId).eq("is_active", true)
     } else {
-      query = query.eq("id", DEFAULT_LAYOUT_UUID).eq("is_active", true)
+      query = query.eq("id", DEFAULT_LAYOUT_UUID)
     }
+    
+    query = query.order("updated_at", { ascending: false })
 
     let retryCount = 0
     const maxRetries = 3
@@ -630,7 +632,49 @@ export async function getWarehouseLayout(warehouseId?: string): Promise<Warehous
         }
 
         if (!data) {
-          console.log("📊 No active layout found, creating default layout")
+          console.log("📊 No layout found, trying to find any recent layout...")
+          
+          // Try to find any recent layout for this warehouse (regardless of is_active status)
+          if (warehouseId) {
+            const { data: anyLayout, error: anyError } = await supabase
+              .from("Depo_Ruzgar_Warehouse_Layouts")
+              .select("*")
+              .eq("warehouse_id", warehouseId)
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .single()
+            
+            if (!anyError && anyLayout) {
+              console.log("📊 Found recent layout, using it and marking as active")
+              // Update this layout to be active
+              await supabase
+                .from("Depo_Ruzgar_Warehouse_Layouts")
+                .update({ is_active: true })
+                .eq("id", anyLayout.id)
+              
+              let shelves
+              if (typeof anyLayout.shelves === "string") {
+                shelves = JSON.parse(anyLayout.shelves)
+              } else {
+                shelves = anyLayout.shelves
+              }
+              
+              const layout: WarehouseLayout = {
+                id: anyLayout.id,
+                name: anyLayout.name,
+                shelves: shelves.map((shelf: any) => ({
+                  ...shelf,
+                  rotation: shelf.rotation || 0,
+                })),
+                createdAt: new Date(anyLayout.created_at).getTime(),
+                updatedAt: new Date(anyLayout.updated_at).getTime(),
+                warehouse_id: anyLayout.warehouse_id,
+              }
+              return layout
+            }
+          }
+          
+          console.log("📊 No existing layout found, creating default layout")
           const defaultLayout = getDefaultWarehouseLayout(warehouseId)
           const saved = await saveWarehouseLayout(defaultLayout, undefined, warehouseId)
           if (!saved) {
