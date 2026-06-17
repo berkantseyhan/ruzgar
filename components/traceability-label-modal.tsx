@@ -782,8 +782,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
             <Tag className="h-3.5 w-3.5" />
             Etiket Oluştur
           </button>
-          {/* History tab hidden for now — will be re-enabled later */}
-          {/* <button
+          <button
             onClick={() => setActiveTab("history")}
             className={`flex items-center gap-2 text-xs font-semibold py-2.5 px-1 border-b-2 transition-colors ${
               activeTab === "history"
@@ -793,7 +792,7 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
           >
             <History className="h-3.5 w-3.5" />
             Geçmiş
-          </button> */}
+          </button>
         </div>
 
         {/* Content */}
