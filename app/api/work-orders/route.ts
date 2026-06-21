@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
 
 interface WorkOrderData {
@@ -11,9 +11,23 @@ interface WorkOrderData {
   notes: string
 }
 
+// Create admin client for API routes
+function getAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Supabase configuration missing for admin client")
+  }
+
+  return createAdminClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false },
+  })
+}
+
 // Generate work order ID based on date and sequence
 async function generateWorkOrderNo(): Promise<string> {
-  const supabase = createClient()
+  const supabase = getAdminClient()
   const today = new Date().toISOString().split("T")[0].replace(/-/g, "")
   
   // Get the last sequence number for today
@@ -37,7 +51,7 @@ async function generateWorkOrderNo(): Promise<string> {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as WorkOrderData
-    const supabase = createClient()
+    const supabase = getAdminClient()
     
     // Generate work order ID based on date and sequence
     const workOrderNo = await generateWorkOrderNo()
@@ -73,7 +87,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const supabase = getAdminClient()
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get("limit") || "50")
     
