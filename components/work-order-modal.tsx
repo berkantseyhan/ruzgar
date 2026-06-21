@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Printer, X } from "lucide-react"
+import WorkOrdersHistory from "@/components/work-orders-history"
 
 interface WorkOrderModalProps {
   open: boolean
@@ -115,15 +117,23 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Yeni İş Emri Oluştur</DialogTitle>
-          <DialogDescription>
-            Form verileri A4 formatında yazdırılacak ve otomatik olarak kaydedilecektir
-          </DialogDescription>
+          <DialogTitle>İş Emri Yönetimi</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-4">
+        <Tabs defaultValue="yeni" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="yeni">Yeni İş Emri</TabsTrigger>
+            <TabsTrigger value="gecmis">Geçmiş</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="yeni" className="space-y-4">
+            <DialogDescription>
+              Form verileri A4 formatında yazdırılacak ve otomatik olarak kaydedilecektir
+            </DialogDescription>
+
+            <div className="grid grid-cols-2 gap-4">
           {/* Product */}
           <div className="space-y-2">
             <Label htmlFor="product" className="font-semibold">
@@ -221,27 +231,33 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
               className="text-base px-4 py-2 min-h-24 resize-none"
             />
           </div>
-        </div>
+            </div>
 
-        <DialogFooter className="flex justify-between">
-          <Button
-            onClick={onClose}
-            variant="outline"
-            className="gap-2"
-            disabled={isLoading}
-          >
-            <X className="h-4 w-4" />
-            İptal
-          </Button>
-          <Button
-            onClick={handlePrint}
-            disabled={isLoading}
-            className="gap-2 bg-blue-600 hover:bg-blue-700"
-          >
-            <Printer className="h-4 w-4" />
-            {isLoading ? "Kaydediliyor..." : "Yazdır"}
-          </Button>
-        </DialogFooter>
+            <DialogFooter className="flex justify-between">
+              <Button
+                onClick={onClose}
+                variant="outline"
+                className="gap-2"
+                disabled={isLoading}
+              >
+                <X className="h-4 w-4" />
+                İptal
+              </Button>
+              <Button
+                onClick={handlePrint}
+                disabled={isLoading}
+                className="gap-2 bg-blue-600 hover:bg-blue-700"
+              >
+                <Printer className="h-4 w-4" />
+                {isLoading ? "Kaydediliyor..." : "Yazdır"}
+              </Button>
+            </DialogFooter>
+          </TabsContent>
+
+          <TabsContent value="gecmis">
+            <WorkOrdersHistory />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   )

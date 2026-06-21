@@ -12,7 +12,6 @@ import { WarehouseSelector } from "@/components/warehouse-selector"
 import LabelGeneratorModal from "@/components/label-generator-modal"
 import TraceabilityLabelModal from "@/components/traceability-label-modal"
 import WorkOrderModal from "@/components/work-order-modal"
-import WorkOrdersHistory from "@/components/work-orders-history"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -157,7 +156,7 @@ export default function Dashboard() {
 
         <Tabs value={activeTab} className="w-full">
           {/* Modern tab design */}
-          <div className="max-w-2xl mx-auto mb-8 p-1.5 bg-gray-800 dark:bg-gray-900 rounded-xl shadow-md flex space-x-2">
+          <div className="max-w-md mx-auto mb-8 p-1.5 bg-gray-800 dark:bg-gray-900 rounded-xl shadow-md flex space-x-2">
             <button
               onClick={() => setActiveTab("harita")}
               className={cn(
@@ -182,18 +181,6 @@ export default function Dashboard() {
               <Plus className="h-4 w-4" />
               <span>Ürün Ekle</span>
             </button>
-            <button
-              onClick={() => setActiveTab("gecmis")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium text-sm transition-all duration-200",
-                activeTab === "gecmis"
-                  ? "bg-blue-600 text-white shadow-lg"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600",
-              )}
-            >
-              <History className="h-4 w-4" />
-              <span>İş Emirleri</span>
-            </button>
           </div>
 
           <div className="bg-card rounded-lg border shadow-sm p-6">
@@ -203,10 +190,6 @@ export default function Dashboard() {
 
             <TabsContent value="urunEkle" className="mt-0 animate-fadeIn">
               <ProductForm onSuccess={() => setActiveTab("harita")} />
-            </TabsContent>
-
-            <TabsContent value="gecmis" className="mt-0 animate-fadeIn">
-              <WorkOrdersHistory />
             </TabsContent>
           </div>
         </Tabs>
