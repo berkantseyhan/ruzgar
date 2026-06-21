@@ -9,6 +9,8 @@ interface WorkOrderData {
   material: string
   machine: string
   notes: string
+  date: string
+  time: string
 }
 
 // Create admin client for API routes
@@ -68,6 +70,8 @@ export async function POST(request: NextRequest) {
         material: body.material,
         machine: body.machine,
         notes: body.notes,
+        date: body.date || null,
+        time: body.time || null,
       })
       .select("*")
     

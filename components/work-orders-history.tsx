@@ -131,7 +131,7 @@ export default function WorkOrdersHistory() {
                 <TableCell className="text-sm">{order.customer}</TableCell>
                 <TableCell className="text-sm">{order.order_no || "-"}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {new Date(order.created_at).toLocaleDateString("tr-TR")}
+                  {order.date ? `${order.date}${order.time ? " " + order.time : ""}` : new Date(order.created_at).toLocaleDateString("tr-TR")}
                 </TableCell>
                 <TableCell className="text-right space-x-2 flex justify-end">
                   <Button
