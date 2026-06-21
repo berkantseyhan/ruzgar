@@ -40,6 +40,7 @@ const DEFAULT_FIELDS: LabelField[] = [
   { id: "urun",     label: "Ürün Adı",   value: "", enabled: true,  big: true,  size: "l" },
   { id: "olcu",     label: "Ölçü",       value: "", enabled: true,  big: false, size: "l" },
   { id: "malzeme",  label: "Malzeme",    value: "", enabled: true,  big: false, size: "l" },
+  { id: "dokum",    label: "Döküm No",   value: "", enabled: true,  big: false, size: "l" },
   { id: "kg",       label: "KG",         value: "", enabled: true,  big: false, size: "l" },
   { id: "adet",     label: "Adet",       value: "", enabled: true,  big: false, size: "l" },
   { id: "siparis",  label: "Sipariş No", value: "", enabled: false, big: false, size: "l" },

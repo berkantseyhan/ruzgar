@@ -11,6 +11,7 @@ import ProductForm from "@/components/product-form"
 import { WarehouseSelector } from "@/components/warehouse-selector"
 import LabelGeneratorModal from "@/components/label-generator-modal"
 import TraceabilityLabelModal from "@/components/traceability-label-modal"
+import WorkOrderModal from "@/components/work-order-modal"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -24,6 +25,7 @@ export default function Dashboard() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [showLabelModal, setShowLabelModal] = useState(false)
   const [showTraceModal, setShowTraceModal] = useState(false)
+  const [showWorkOrderModal, setShowWorkOrderModal] = useState(false)
 
   const handleLogout = async () => {
     if (!username) return
@@ -96,6 +98,13 @@ export default function Dashboard() {
               >
                 <ScanBarcode className="h-4 w-4" />
                 Traceability
+              </Button>
+              <Button
+                onClick={() => setShowWorkOrderModal(true)}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white transition-colors duration-200 shadow-md"
+              >
+                <Plus className="h-4 w-4" />
+                İş Emri
               </Button>
               <Button
                 variant="ghost"
@@ -188,6 +197,7 @@ export default function Dashboard() {
 
       {showLabelModal && <LabelGeneratorModal onClose={() => setShowLabelModal(false)} />}
       {showTraceModal && <TraceabilityLabelModal onClose={() => setShowTraceModal(false)} />}
+      {showWorkOrderModal && <WorkOrderModal open={showWorkOrderModal} onClose={() => setShowWorkOrderModal(false)} />}
     </div>
   )
 }
