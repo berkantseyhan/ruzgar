@@ -37,12 +37,26 @@ async function generateWorkOrderNo(): Promise<string> {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as WorkOrderData
+    console.log("[v0] Work order POST body:", body)
+    
     const supabase = createClient()
     
     // Generate work order ID based on date and sequence
     const workOrderNo = await generateWorkOrderNo()
+    console.log("[v0] Generated work order no:", workOrderNo)
     
     // Save to database
+    console.log("[v0] Inserting work order with data:", {
+      work_order_no: workOrderNo,
+      product: body.product,
+      product_size: body.productSize,
+      customer: body.customer,
+      order_no: body.orderNo,
+      material: body.material,
+      machine: body.machine,
+      notes: body.notes,
+    })
+    
     const { data, error } = await supabase
       .from("Ruzgar_Work_Orders")
       .insert({
@@ -54,13 +68,12 @@ export async function POST(request: NextRequest) {
         material: body.material,
         machine: body.machine,
         notes: body.notes,
-        created_at: new Date().toISOString(),
       })
-      .select()
-      .single()
+      .select("*")
     
     if (error) {
       console.error("[v0] Error saving work order:", error)
+      console.error("[v0] Error details:", JSON.stringify(error))
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
     
