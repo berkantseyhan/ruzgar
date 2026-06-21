@@ -1,39 +1,71 @@
+import { createClient } from "@/lib/supabase"
 import { NextRequest, NextResponse } from "next/server"
+
+interface WorkOrderData {
+  product: string
+  productSize: string
+  customer: string
+  orderNo: string
+  material: string
+  machine: string
+  notes: string
+}
+
+// Generate work order ID based on date and sequence
+async function generateWorkOrderNo(): Promise<string> {
+  const supabase = createClient()
+  const today = new Date().toISOString().split("T")[0].replace(/-/g, "")
+  
+  // Get the last sequence number for today
+  const { data: lastOrder } = await supabase
+    .from("Ruzgar_Work_Orders")
+    .select("work_order_no")
+    .like("work_order_no", `${today}%`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single()
+  
+  let sequence = 1
+  if (lastOrder && lastOrder.work_order_no) {
+    const lastSeq = parseInt(lastOrder.work_order_no.slice(-3))
+    sequence = lastSeq + 1
+  }
+  
+  return `${today}-${String(sequence).padStart(3, "0")}`
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-
-    // Validate required fields
-    if (!body.workOrderNo) {
-      return NextResponse.json(
-        { error: "İş Emri No zorunludur" },
-        { status: 400 }
-      )
+    const body = (await request.json()) as WorkOrderData
+    const supabase = createClient()
+    
+    // Generate work order ID based on date and sequence
+    const workOrderNo = await generateWorkOrderNo()
+    
+    // Save to database
+    const { data, error } = await supabase
+      .from("Ruzgar_Work_Orders")
+      .insert({
+        work_order_no: workOrderNo,
+        product: body.product,
+        product_size: body.productSize,
+        customer: body.customer,
+        order_no: body.orderNo,
+        material: body.material,
+        machine: body.machine,
+        notes: body.notes,
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+    
+    if (error) {
+      console.error("[v0] Error saving work order:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
-
-    // Log the work order (in production, save to database)
-    console.log("[v0] Work Order Created:", {
-      workOrderNo: body.workOrderNo,
-      product: body.product,
-      productSize: body.productSize,
-      customer: body.customer,
-      orderNo: body.orderNo,
-      notes: body.notes,
-      createdAt: body.createdAt,
-      signature: body.signature ? "✓ Present" : "✗ Missing",
-    })
-
-    // In production, you would save this to your database (Supabase, etc.)
-    // For now, we'll just log and return success
-    return NextResponse.json(
-      {
-        success: true,
-        message: "İş emri başarıyla kaydedildi",
-        workOrderNo: body.workOrderNo,
-      },
-      { status: 201 }
-    )
+    
+    console.log("[v0] Work Order Saved:", data)
+    return NextResponse.json({ success: true, workOrder: data, workOrderNo })
   } catch (error) {
     console.error("[v0] Work Order Error:", error)
     return NextResponse.json(
@@ -43,9 +75,26 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json(
-    { message: "Work Orders API" },
-    { status: 200 }
-  )
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createClient()
+    const { searchParams } = new URL(request.url)
+    const limit = parseInt(searchParams.get("limit") || "50")
+    
+    const { data, error } = await supabase
+      .from("Ruzgar_Work_Orders")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit)
+    
+    if (error) {
+      console.error("[v0] Error fetching work orders:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    
+    return NextResponse.json({ workOrders: data })
+  } catch (error) {
+    console.error("[v0] Error:", error)
+    return NextResponse.json({ error: "İş emirleri alınamadı" }, { status: 500 })
+  }
 }

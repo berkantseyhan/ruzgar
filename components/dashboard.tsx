@@ -12,6 +12,7 @@ import { WarehouseSelector } from "@/components/warehouse-selector"
 import LabelGeneratorModal from "@/components/label-generator-modal"
 import TraceabilityLabelModal from "@/components/traceability-label-modal"
 import WorkOrderModal from "@/components/work-order-modal"
+import WorkOrdersHistory from "@/components/work-orders-history"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -190,6 +191,10 @@ export default function Dashboard() {
 
             <TabsContent value="urunEkle" className="mt-0 animate-fadeIn">
               <ProductForm onSuccess={() => setActiveTab("harita")} />
+            </TabsContent>
+
+            <TabsContent value="gecmis" className="mt-0 animate-fadeIn">
+              <WorkOrdersHistory />
             </TabsContent>
           </div>
         </Tabs>
