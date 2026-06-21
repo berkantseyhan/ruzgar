@@ -243,30 +243,30 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
           {/* Date */}
           <div className="space-y-2">
             <Label htmlFor="date" className="font-semibold">
-              Tarih (GG/AA/YYYY)
+              Tarih
             </Label>
             <Input
               id="date"
-              type="date"
+              type="text"
+              placeholder="GG.AA.YYYY"
               value={form.date}
               onChange={(e) => handleInputChange("date", e.target.value)}
               className="text-base px-4 py-2"
-              lang="tr-TR"
             />
           </div>
 
           {/* Time */}
           <div className="space-y-2">
             <Label htmlFor="time" className="font-semibold">
-              Saat (24:00 Formatı)
+              Saat
             </Label>
             <Input
               id="time"
-              type="time"
+              type="text"
+              placeholder="SS:DD"
               value={form.time}
               onChange={(e) => handleInputChange("time", e.target.value)}
               className="text-base px-4 py-2"
-              lang="tr-TR"
             />
           </div>
 
