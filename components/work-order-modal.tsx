@@ -31,6 +31,7 @@ interface WorkOrderForm {
 export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  const [workOrderNo, setWorkOrderNo] = useState<string>("")
   const [form, setForm] = useState<WorkOrderForm>({
     product: "",
     productSize: "",
@@ -73,10 +74,11 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
         throw new Error(error.error || "İş emri kaydedilemedi")
       }
 
-      const { workOrderNo } = await saveResponse.json()
+      const { workOrderNo: newWorkOrderNo } = await saveResponse.json()
+      setWorkOrderNo(newWorkOrderNo)
 
       // Generate print HTML
-      const printHtml = generatePrintHTML(form, workOrderNo)
+      const printHtml = generatePrintHTML(form, newWorkOrderNo)
 
       // Open print window
       const printWindow = window.open("", "_blank", "width=1000,height=1200")
@@ -125,13 +127,20 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <DialogTitle>İş Emri Yönetimi</DialogTitle>
-            {form.product && (
-              <div className="text-sm bg-blue-50 text-blue-900 px-3 py-1.5 rounded-lg">
-                <strong>Ürün:</strong> {form.product}
-              </div>
-            )}
+            <div className="flex gap-3">
+              {workOrderNo && (
+                <div className="text-sm bg-green-50 text-green-900 px-3 py-1.5 rounded-lg font-mono font-bold">
+                  {workOrderNo}
+                </div>
+              )}
+              {form.product && (
+                <div className="text-sm bg-blue-50 text-blue-900 px-3 py-1.5 rounded-lg">
+                  <strong>Ürün:</strong> {form.product}
+                </div>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
@@ -234,7 +243,7 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
           {/* Date */}
           <div className="space-y-2">
             <Label htmlFor="date" className="font-semibold">
-              Tarih
+              Tarih (GG/AA/YYYY)
             </Label>
             <Input
               id="date"
@@ -242,13 +251,14 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
               value={form.date}
               onChange={(e) => handleInputChange("date", e.target.value)}
               className="text-base px-4 py-2"
+              lang="tr-TR"
             />
           </div>
 
           {/* Time */}
           <div className="space-y-2">
             <Label htmlFor="time" className="font-semibold">
-              Saat
+              Saat (24:00 Formatı)
             </Label>
             <Input
               id="time"
@@ -256,6 +266,7 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
               value={form.time}
               onChange={(e) => handleInputChange("time", e.target.value)}
               className="text-base px-4 py-2"
+              lang="tr-TR"
             />
           </div>
 
