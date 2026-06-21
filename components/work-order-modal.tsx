@@ -24,6 +24,8 @@ interface WorkOrderForm {
   material: string
   machine: string
   notes: string
+  date: string
+  time: string
 }
 
 export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
@@ -37,6 +39,8 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
     material: "",
     machine: "",
     notes: "",
+    date: "",
+    time: "",
   })
 
   const handleInputChange = (field: keyof WorkOrderForm, value: string) => {
@@ -99,6 +103,8 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
               material: "",
               machine: "",
               notes: "",
+              date: "",
+              time: "",
             })
           }
         }, 500)
@@ -119,7 +125,14 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>İş Emri Yönetimi</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>İş Emri Yönetimi</DialogTitle>
+            {form.product && (
+              <div className="text-sm bg-blue-50 text-blue-900 px-3 py-1.5 rounded-lg">
+                <strong>Ürün:</strong> {form.product}
+              </div>
+            )}
+          </div>
         </DialogHeader>
 
         <Tabs defaultValue="yeni" className="w-full">
@@ -214,6 +227,34 @@ export default function WorkOrderModal({ open, onClose }: WorkOrderModalProps) {
               placeholder="Sipariş no girin"
               value={form.orderNo}
               onChange={(e) => handleInputChange("orderNo", e.target.value)}
+              className="text-base px-4 py-2"
+            />
+          </div>
+
+          {/* Date */}
+          <div className="space-y-2">
+            <Label htmlFor="date" className="font-semibold">
+              Tarih
+            </Label>
+            <Input
+              id="date"
+              type="date"
+              value={form.date}
+              onChange={(e) => handleInputChange("date", e.target.value)}
+              className="text-base px-4 py-2"
+            />
+          </div>
+
+          {/* Time */}
+          <div className="space-y-2">
+            <Label htmlFor="time" className="font-semibold">
+              Saat
+            </Label>
+            <Input
+              id="time"
+              type="time"
+              value={form.time}
+              onChange={(e) => handleInputChange("time", e.target.value)}
               className="text-base px-4 py-2"
             />
           </div>
@@ -486,11 +527,11 @@ function generatePrintHTML(form: WorkOrderForm, workOrderNo: string): string {
       <div class="info-row">
         <div class="info-field">
           <label>Tarih</label>
-          <div class="value">&nbsp;</div>
+          <div class="value">${form.date || "&nbsp;"}</div>
         </div>
         <div class="info-field">
           <label>Saat</label>
-          <div class="value">&nbsp;</div>
+          <div class="value">${form.time || "&nbsp;"}</div>
         </div>
       </div>
     </div>

@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Printer } from "lucide-react"
+import { Printer, Trash2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 interface WorkOrder {
@@ -67,6 +67,34 @@ export default function WorkOrdersHistory() {
     }
   }
 
+  const handleDeleteWorkOrder = async (id: string) => {
+    if (!window.confirm("Bu iş emrini silmek istediğinize emin misiniz?")) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/work-orders/${id}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) throw new Error("Silme başarısız")
+
+      toast({
+        title: "Başarılı",
+        description: "İş emri silindi",
+      })
+
+      fetchWorkOrders()
+    } catch (error) {
+      console.error("[v0] Error deleting work order:", error)
+      toast({
+        title: "Hata",
+        description: "İş emri silinemedi",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (isLoading) {
     return <div className="text-center text-muted-foreground py-8">Yükleniyor...</div>
   }
@@ -105,7 +133,7 @@ export default function WorkOrdersHistory() {
                 <TableCell className="text-sm text-muted-foreground">
                   {new Date(order.created_at).toLocaleDateString("tr-TR")}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right space-x-2 flex justify-end">
                   <Button
                     onClick={() => handlePrintWorkOrder(order)}
                     variant="ghost"
@@ -115,6 +143,16 @@ export default function WorkOrdersHistory() {
                   >
                     <Printer className="h-4 w-4" />
                     Yazdır
+                  </Button>
+                  <Button
+                    onClick={() => handleDeleteWorkOrder(order.id)}
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                    title="Sil"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Sil
                   </Button>
                 </TableCell>
               </TableRow>
