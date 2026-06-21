@@ -127,12 +127,6 @@ export default function WorkOrdersHistory() {
 }
 
 function generatePrintHTML(workOrder: WorkOrder): string {
-  const today = new Date(workOrder.created_at).toLocaleDateString("tr-TR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-
   return `
 <!DOCTYPE html>
 <html lang="tr">
@@ -241,8 +235,8 @@ function generatePrintHTML(workOrder: WorkOrder): string {
     .signature-section {
       margin-top: 40px;
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 30px;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
       text-align: center;
     }
     
@@ -335,7 +329,11 @@ function generatePrintHTML(workOrder: WorkOrder): string {
       <div class="info-row">
         <div class="info-field">
           <label>Tarih</label>
-          <div class="value">${today}</div>
+          <div class="value">&nbsp;</div>
+        </div>
+        <div class="info-field">
+          <label>Saat</label>
+          <div class="value">&nbsp;</div>
         </div>
       </div>
     </div>
@@ -347,13 +345,6 @@ function generatePrintHTML(workOrder: WorkOrder): string {
       <div class="signature-box">
         <div class="signature-label">Onaylayan</div>
       </div>
-      <div class="signature-box">
-        <div class="signature-label">Müdür</div>
-      </div>
-    </div>
-    
-    <div class="footer">
-      <p>Bu belge İşletmenin kayıtlarında tutulmalıdır.</p>
     </div>
   </div>
 </body>
