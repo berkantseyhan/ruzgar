@@ -630,8 +630,25 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
       setTraceLoading(false)
     }
   }
-  const updateField = (id: string, value: string) =>
+  const updateField = (id: string, value: string) => {
     setFields((f) => f.map((field) => (field.id === id ? { ...field, value } : field)))
+    
+    // Auto-generate döküm no when lot is selected
+    if (id === "lot" && value.trim()) {
+      fetch("/api/dokum-number", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lot: value }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          setFields((f) =>
+            f.map((field) => (field.id === "dokum" ? { ...field, value: data.dokumNo } : field))
+          )
+        })
+        .catch((err) => console.error("[v0] Error generating dokum number:", err))
+    }
+  }
   const resizeField = (id: string, size: FieldSize) =>
     setFields((f) => f.map((field) => (field.id === id ? { ...field, size } : field)))
   const toggleField = (id: string) =>
