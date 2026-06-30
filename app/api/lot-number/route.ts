@@ -5,32 +5,17 @@ export async function POST() {
   try {
     const supabase = await createClient()
 
-    // Get today's date key in Turkey timezone (UTC+3)
-    const now = new Date()
-    const tr = new Intl.DateTimeFormat("tr-TR", {
-      timeZone: "Europe/Istanbul",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(now)
-
-    const year  = tr.find((p) => p.type === "year")!.value
-    const month = tr.find((p) => p.type === "month")!.value
-    const day   = tr.find((p) => p.type === "day")!.value
-    const dateKey = `${year}${month}${day}` // e.g. "20260507"
-
-    // Call the atomic Postgres function
+    // Use a single global counter so lot numbers are a continuous sequence
     const { data, error } = await supabase
-      .rpc("next_lot_seq", { p_date_key: dateKey })
+      .rpc("next_lot_seq", { p_date_key: "global" })
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     const seq = data as number
-    // Zero-pad to 4 digits: 0001, 0012, etc.
-    const seqStr = String(seq).padStart(4, "0")
-    const lotNo = `LOT-${dateKey}-${seqStr}`
+    // Zero-pad to 6 digits: 000001, 000012, etc.
+    const lotNo = String(seq).padStart(6, "0")
 
     return NextResponse.json({ lotNo })
   } catch (err: unknown) {
