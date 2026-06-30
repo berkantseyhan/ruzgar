@@ -634,8 +634,29 @@ export default function TraceabilityLabelModal({ onClose }: TraceabilityLabelMod
     setFields((f) => f.map((field) => (field.id === id ? { ...field, value } : field)))
   const resizeField = (id: string, size: FieldSize) =>
     setFields((f) => f.map((field) => (field.id === id ? { ...field, size } : field)))
-  const toggleField = (id: string) =>
+  const toggleField = (id: string) => {
     setFields((f) => f.map((field) => (field.id === id ? { ...field, enabled: !field.enabled } : field)))
+
+    // Auto-generate a unique lot number from the database when the Lot field is enabled
+    if (id === "lot") {
+      const lotField = fields.find((f) => f.id === "lot")
+      const isBecomingEnabled = lotField && !lotField.enabled
+      const hasNoValue = !lotField?.value?.trim()
+
+      if (isBecomingEnabled && hasNoValue) {
+        fetch("/api/lot-number", { method: "POST" })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.lotNo) {
+              setFields((f) =>
+                f.map((field) => (field.id === "lot" ? { ...field, value: data.lotNo } : field))
+              )
+            }
+          })
+          .catch((err) => console.error("[v0] Error generating lot number:", err))
+      }
+    }
+  }
 
   const enabledFields  = fields.filter((f) => f.enabled)
   const disabledFields = fields.filter((f) => !f.enabled)
