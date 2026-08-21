@@ -44,6 +44,7 @@ const DEFAULT_FIELDS: LabelField[] = [
   { id: "kg",       label: "KG",         value: "", enabled: true,  big: false, size: "l" },
   { id: "adet",     label: "Adet",       value: "", enabled: true,  big: false, size: "l" },
   { id: "siparis",  label: "Sipariş No", value: "", enabled: false, big: false, size: "l" },
+  { id: "alici",    label: "Alıcı",       value: "", enabled: false, big: false, size: "l" },
   { id: "lot",      label: "Lot",        value: "", enabled: false, big: false, size: "l" },
   { id: "tarih",    label: "Tarih",      value: new Date().toLocaleDateString("tr-TR"), enabled: true, big: false, size: "l" },
   { id: "not",      label: "Not",        value: "", enabled: false, big: false, size: "l" },
